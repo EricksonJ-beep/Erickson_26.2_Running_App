@@ -49,35 +49,8 @@ export const PACES = {
   marathon: "9:35–9:45 /mi"
 };
 
-// HR zones — Tanaka est. max HR for age 39 ≈ 181 bpm.
-// If a watch records a higher true max, recalibrate from that number.
-export const MAX_HR = 181;
-
-export const HR_TARGETS: Record<string, string> = {
-  easy: "109–136 bpm (Z2)",
-  long: "109–140 bpm (Z2)",
-  tempo: "148–163 bpm (Z4)",
-  intervals: "163–175 bpm (Z5)",
-  halfRace: "150–165 bpm",
-  marathon: "136–148 bpm (Z3)"
-};
-
-export const HR_NOTES: Record<string, string> = {
-  easy: "If HR climbs past 136, walk 30 sec. Pace ego aside — the zone is the workout.",
-  long: "Stay Z2. Late-run drift to ~140 in heat is normal; above that, ease off.",
-  tempo: "Settle into Z4 by the second tempo mile. HR lags effort by a minute.",
-  intervals: "Run reps by effort/pace — HR lags too much on short reps. Check it on recoveries.",
-  halfRace: "Expect Z4 most of the race, Z5 in the final miles.",
-  marathon: "Discipline zone. Z3 cap for 20 miles is what makes the last 10K possible."
-};
-
-export const ZONES = [
-  { z: "Z1", name: "Recovery", bpm: "91–108", use: "Walks, recovery jogs" },
-  { z: "Z2", name: "Easy / Aerobic", bpm: "109–136", use: "Easy + long runs — 80% of all miles" },
-  { z: "Z3", name: "Steady", bpm: "136–148", use: "Marathon-pace work" },
-  { z: "Z4", name: "Threshold", bpm: "148–163", use: "Tempo runs (lactate threshold)" },
-  { z: "Z5", name: "VO₂", bpm: "163–178", use: "Interval reps" }
-];
+// HR zones + per-workout targets now live in lib/zones.ts,
+// computed from the profile (Settings on the Progress tab).
 
 export const PACE_NOTES: Record<string, string> = {
   easy: "Conversational. Full sentences out loud. If in doubt, slower.",

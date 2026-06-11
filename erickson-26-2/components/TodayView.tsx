@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import {
-  HALF_DATE, FULL_DATE, PACES, PACE_NOTES, HR_TARGETS, HR_NOTES,
+  HALF_DATE, FULL_DATE, PACES, PACE_NOTES,
   daysUntil, findWeek, nextWorkout, todayISO, workoutOn, Workout
 } from "@/lib/plan";
-import { getDone, getRuns, paceOf, toggleDone } from "@/lib/storage";
+import { hrGuide } from "@/lib/zones";
+import { getDone, getProfile, getRuns, paceOf, toggleDone } from "@/lib/storage";
 
 const TYPE_PACE: Record<string, keyof typeof PACES | null> = {
   easy: "easy", long: "long", tempo: "tempo", intervals: "intervals", race: "halfRace"
@@ -29,6 +30,7 @@ export default function TodayView({ onGoLog }: { onGoLog: () => void }) {
   const toFull = daysUntil(FULL_DATE, today);
 
   const isRest = !workout;
+  const guide = hrGuide(getProfile());
   const paceKey = workout ? TYPE_PACE[workout.type] : null;
   const isRace = workout?.type === "race";
   const racePace = isRace && workout.date === FULL_DATE ? PACES.marathon : PACES.halfRace;
@@ -153,11 +155,11 @@ export default function TodayView({ onGoLog }: { onGoLog: () => void }) {
                       </span>
                       <span className="font-display font-bold text-xl text-bone tabular-nums">
                         {isRace && workout.date === FULL_DATE
-                          ? HR_TARGETS.marathon
-                          : HR_TARGETS[paceKey]}
+                          ? guide.marathon.target
+                          : guide[paceKey].target}
                       </span>
                     </div>
-                    <p className="text-xs text-dust mt-1">{HR_NOTES[paceKey]}</p>
+                    <p className="text-xs text-dust mt-1">{guide[paceKey].note}</p>
                   </div>
                 </div>
               )}

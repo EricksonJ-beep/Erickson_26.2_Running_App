@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { PLAN, Phase, ZONES, MAX_HR, daysUntil, findWeek, todayISO } from "@/lib/plan";
-import { exportAll, getDone, getRuns, importAll, paceOf } from "@/lib/storage";
+import { PLAN, Phase, daysUntil, findWeek, todayISO } from "@/lib/plan";
+import { computeZones, methodLabel } from "@/lib/zones";
+import {
+  exportAll, getDone, getProfile, getRuns, importAll, paceOf, saveProfile, Profile
+} from "@/lib/storage";
 
 const PHASE_COLOR: Record<Phase, string> = {
   "Half Build": "bg-gold",
@@ -177,18 +180,16 @@ export default function ProgressView() {
         </div>
       </div>
 
-      {/* HR zones */}
+      {/* HR zones — computed from profile */}
       <div className="bg-coal rounded-2xl border border-seam p-5">
         <h2 className="font-display font-bold text-xl text-bone">HR zones</h2>
-        <p className="text-[11px] text-dust mt-0.5">
-          Est. max {MAX_HR} bpm (age 39, Tanaka). If your watch records higher, recalibrate.
-        </p>
+        <p className="text-[11px] text-dust mt-0.5">{methodLabel(getProfile())}</p>
         <div className="mt-3 space-y-1.5">
-          {ZONES.map((z) => (
+          {computeZones(getProfile()).map((z) => (
             <div key={z.z} className="bg-ink rounded-lg px-3 py-2 flex items-center gap-3">
               <span className="font-display font-bold text-gold w-7">{z.z}</span>
               <span className="font-display font-semibold text-bone tabular-nums w-20">
-                {z.bpm}
+                {z.lo}–{z.hi}
               </span>
               <span className="text-[11px] text-dust flex-1 leading-snug">
                 {z.name} — {z.use}
@@ -197,6 +198,9 @@ export default function ProgressView() {
           ))}
         </div>
       </div>
+
+      {/* Profile — feeds the zone engine */}
+      <ProfileCard onSaved={() => force((n) => n + 1)} />
 
       {/* Backup */}
       <div className="bg-coal rounded-2xl border border-seam p-5">
@@ -242,6 +246,68 @@ export default function ProgressView() {
           />
         </div>
       </div>
+    </div>
+  );
+}
+
+function ProfileCard({ onSaved }: { onSaved: () => void }) {
+  const [p, setP] = useState<Profile | null>(null);
+  const [saved, setSaved] = useState(false);
+  useEffect(() => setP(getProfile()), []);
+  if (!p) return null;
+
+  const field = (
+    key: keyof Profile,
+    label: string,
+    placeholder: string,
+    min: number,
+    max: number
+  ) => (
+    <label className="block">
+      <span className="text-[10px] uppercase tracking-widest text-dust font-display font-semibold">
+        {label}
+      </span>
+      <input
+        type="number"
+        inputMode="numeric"
+        value={p[key] ?? ""}
+        placeholder={placeholder}
+        min={min}
+        max={max}
+        onChange={(e) => {
+          const n = parseInt(e.target.value, 10);
+          setP({ ...p, [key]: Number.isFinite(n) && n >= min && n <= max ? n : undefined });
+          setSaved(false);
+        }}
+        className="mt-1 w-full bg-ink border border-seam rounded-lg px-3 py-2 text-bone tabular-nums text-sm focus:outline-none focus:border-gold"
+      />
+    </label>
+  );
+
+  return (
+    <div className="bg-coal rounded-2xl border border-seam p-5">
+      <h2 className="font-display font-bold text-xl text-bone">Your numbers</h2>
+      <p className="text-[11px] text-dust mt-0.5 leading-snug">
+        From your Garmin: resting HR after a week of wear, max HR from a hard effort,
+        LTHR from a threshold test with the chest strap. Every field is optional —
+        zones use the best data you&apos;ve got.
+      </p>
+      <div className="grid grid-cols-2 gap-3 mt-3">
+        {field("age", "Age", "39", 10, 100)}
+        {field("restingHR", "Resting HR", "—", 30, 100)}
+        {field("maxHR", "Max HR", "—", 120, 230)}
+        {field("lthr", "Threshold HR", "—", 100, 210)}
+      </div>
+      <button
+        onClick={() => {
+          saveProfile(p);
+          setSaved(true);
+          onSaved();
+        }}
+        className="mt-3 w-full bg-gold text-ink font-display font-bold uppercase tracking-wider rounded-lg py-2.5 text-sm"
+      >
+        {saved ? "Saved ✓" : "Save — zones update instantly"}
+      </button>
     </div>
   );
 }

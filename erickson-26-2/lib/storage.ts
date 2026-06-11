@@ -19,9 +19,19 @@ export interface FuelLog {
   protein: number;
 }
 
+// Jon's physiology numbers — all optional. Zones sharpen as fields fill in
+// (Garmin watch supplies maxHR/restingHR; chest strap unlocks LTHR).
+export interface Profile {
+  age?: number;
+  restingHR?: number; // bpm, morning resting
+  maxHR?: number; // bpm, highest seen on watch
+  lthr?: number; // bpm, lactate threshold HR (Garmin estimate w/ strap)
+}
+
 const RUNS_KEY = "hr_runs_v1";
 const FUEL_KEY = "hr_fuel_v1";
 const DONE_KEY = "hr_done_v1"; // workout date -> true (non-run completions: XT, strength)
+const PROFILE_KEY = "hr_profile_v1";
 
 function read<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
@@ -74,8 +84,19 @@ export function toggleDone(date: string) {
   write(DONE_KEY, all);
 }
 
+export function getProfile(): Profile {
+  return read(PROFILE_KEY, {});
+}
+export function saveProfile(p: Profile) {
+  write(PROFILE_KEY, p);
+}
+
 export function exportAll(): string {
-  return JSON.stringify({ runs: getRuns(), fuel: getFuel(), done: getDone() }, null, 2);
+  return JSON.stringify(
+    { runs: getRuns(), fuel: getFuel(), done: getDone(), profile: getProfile() },
+    null,
+    2
+  );
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -90,6 +111,7 @@ export function importAll(json: string): boolean {
     if (isRecord(data.runs)) write(RUNS_KEY, data.runs);
     if (isRecord(data.fuel)) write(FUEL_KEY, data.fuel);
     if (isRecord(data.done)) write(DONE_KEY, data.done);
+    if (isRecord(data.profile)) write(PROFILE_KEY, data.profile);
     return true;
   } catch {
     return false;
