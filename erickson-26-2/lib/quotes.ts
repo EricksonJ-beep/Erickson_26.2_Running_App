@@ -33,7 +33,29 @@ export const QUOTES: Quote[] = [
   { text: "You are in danger of living a life so comfortable and soft that you will die without ever realizing your true potential.", who: "David Goggins" },
   { text: "Be more than motivated, be more than driven, become literally obsessed.", who: "David Goggins" },
   { text: "The most important conversations you'll ever have are the ones you'll have with yourself.", who: "David Goggins" },
-  { text: "Suffering is a test. That's all it is.", who: "David Goggins" }
+  { text: "Suffering is a test. That's all it is.", who: "David Goggins" },
+  { text: "When your mind is telling you you're done, you're really only 40 percent done.", who: "David Goggins" },
+
+  // Runners
+  { text: "To give anything less than your best is to sacrifice the gift.", who: "Steve Prefontaine" },
+  { text: "Somebody may beat me, but they are going to have to bleed to do it.", who: "Steve Prefontaine" },
+  { text: "No human is limited.", who: "Eliud Kipchoge" },
+  { text: "Only the disciplined ones in life are free. If you are undisciplined, you are a slave to your moods and your passions.", who: "Eliud Kipchoge" },
+  { text: "Keep showing up.", who: "Des Linden" },
+  { text: "Run when you can, walk if you have to, crawl if you must; just never give up.", who: "Dean Karnazes" },
+  { text: "If you want to run, run a mile. If you want to experience a different life, run a marathon.", who: "Emil Zátopek" },
+  { text: "The miracle isn't that I finished. The miracle is that I had the courage to start.", who: "John Bingham" },
+  { text: "You're better than you think you are. You can do more than you think you can.", who: "Ken Chlouber" },
+
+  // Grit & discipline
+  { text: "Discipline equals freedom.", who: "Jocko Willink" },
+  { text: "Don't count on motivation. Count on discipline.", who: "Jocko Willink" },
+  { text: "I hated every minute of training, but I said, 'Don't quit. Suffer now and live the rest of your life as a champion.'", who: "Muhammad Ali" },
+  { text: "The fight is won or lost far away from witnesses — behind the lines, in the gym, and out there on the road, long before I dance under those lights.", who: "Muhammad Ali" },
+  { text: "The credit belongs to the man who is actually in the arena.", who: "Theodore Roosevelt" },
+  { text: "It ain't about how hard you hit. It's about how hard you can get hit and keep moving forward.", who: "Rocky Balboa" },
+  { text: "The only place success comes before work is in the dictionary.", who: "Vince Lombardi" },
+  { text: "You have power over your mind — not outside events. Realize this, and you will find strength.", who: "Marcus Aurelius" }
 ];
 
 // Stable hash of the date string → same quote all day, different tomorrow.
