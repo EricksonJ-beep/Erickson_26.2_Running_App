@@ -26,7 +26,7 @@ export interface Workout {
   optional?: boolean;
 }
 
-export type Phase = "Half Build" | "Recovery Bridge" | "Marathon Build" | "Taper" | "Race Week";
+export type Phase = "Base" | "Half Build" | "Recovery Bridge" | "Marathon Build" | "Taper" | "Race Week";
 
 export interface Week {
   num: number;
@@ -107,55 +107,62 @@ const XT = (d: number, mins = 35): Spec => ({
 });
 
 export const PLAN: Week[] = [
+  // ── PHASE 0 · BASE (pre-plan miles, logged after the fact) ──
+  wk(0, "Base", "2026-06-01", "Base miles banked before the plan existed. They count.", [
+    { d: 1, type: "easy", title: "Easy run", detail: "2 mi easy, ~9:30–10:00 pace.", miles: 2 },
+    { d: 3, type: "easy", title: "Easy run", detail: "2 mi easy, ~9:30–10:00 pace.", miles: 2 },
+    { d: 6, type: "long", title: "Long run", detail: "5 mi with your son — 1 mi run / 1 min walk. Longest run in a long while, and it worked.", miles: 5 }
+  ]),
+
   // ── PHASE 1 · HALF BUILD ──
-  wk(1, "Half Build", "2026-06-08", "Establish the routine. Every run easy.", [
+  wk(1, "Half Build", "2026-06-08", "Feeling stronger than the plan assumed — rolling with it, carefully.", [
     { d: 1, type: "easy", title: "Easy run", detail: "2 mi easy + 4×20-sec strides after. Strides = smooth, fast, relaxed — not sprints.", miles: 2 },
     { d: 2, type: "easy", title: "Easy run", detail: "2 mi conversational.", miles: 2 },
-    XT(3),
+    { d: 3, type: "easy", title: "Easy run", detail: "3 mi easy on the treadmill.", miles: 3 },
     STR(4),
-    { d: 6, type: "long", title: "Long run", detail: "4 mi relaxed. Finish feeling like you could do one more.", miles: 4 }
+    { d: 6, type: "long", title: "Long run", detail: "6 mi relaxed with your sister. Run/walk welcome — 1 mi run / 1 min walk carried the 5-miler just fine.", miles: 6 }
   ]),
-  wk(2, "Half Build", "2026-06-15", "First taste of threshold work.", [
+  wk(2, "Half Build", "2026-06-15", "First taste of threshold work. Volume eases off after last week's jump.", [
     { d: 1, type: "tempo", title: "Tempo intro", detail: "1 mi easy → 1 mi @ tempo (9:05–9:15) → 1 mi easy.", miles: 3 },
-    { d: 2, type: "easy", title: "Easy run", detail: "2 mi conversational.", miles: 2 },
+    { d: 2, type: "easy", title: "Easy run", detail: "3 mi conversational.", miles: 3 },
     XT(3),
     STR(4),
-    { d: 6, type: "long", title: "Long run", detail: "5 mi relaxed.", miles: 5 }
+    { d: 6, type: "long", title: "Long run", detail: "6 mi relaxed.", miles: 6 }
   ]),
   wk(3, "Half Build", "2026-06-22", "Introduce intervals — speed with control.", [
     { d: 1, type: "intervals", title: "Intervals", detail: "1 mi easy → 6×(1 min hard / 2 min easy jog) → 1 mi easy. ~3 mi total.", miles: 3 },
     { d: 2, type: "easy", title: "Easy run", detail: "3 mi conversational.", miles: 3 },
     XT(3),
     STR(4),
-    { d: 6, type: "long", title: "Long run", detail: "6 mi relaxed.", miles: 6 }
+    { d: 6, type: "long", title: "Long run", detail: "7 mi relaxed.", miles: 7 }
   ]),
-  wk(4, "Half Build", "2026-06-29", "Consolidate. Volume holds nearly flat on purpose.", [
+  wk(4, "Half Build", "2026-06-29", "Consolidate. Volume climbs gently on purpose.", [
     { d: 1, type: "tempo", title: "Tempo", detail: "1 mi easy → 2×(1 mi @ tempo, 3 min jog) → ½ mi easy. ~3.5 mi.", miles: 3.5 },
     { d: 2, type: "easy", title: "Easy run", detail: "3 mi conversational.", miles: 3 },
     XT(3),
     STR(4),
-    { d: 6, type: "long", title: "Long run", detail: "7 mi relaxed. Practice mid-run hydration.", miles: 7 }
+    { d: 6, type: "long", title: "Long run", detail: "8 mi relaxed. Practice mid-run hydration.", miles: 8 }
   ]),
   wk(5, "Half Build", "2026-07-06", "Volume climbs. Protect the easy days.", [
     { d: 1, type: "intervals", title: "Intervals", detail: "1 mi easy → 5×(2 min hard / 2 min jog) → 1 mi easy. ~4 mi.", miles: 4 },
     { d: 2, type: "easy", title: "Easy run", detail: "3 mi conversational.", miles: 3 },
     XT(3),
     STR(4),
-    { d: 6, type: "long", title: "Long run", detail: "8 mi relaxed. Test race-day breakfast this morning.", miles: 8 }
+    { d: 6, type: "long", title: "Long run", detail: "9 mi relaxed. Test race-day breakfast this morning.", miles: 9 }
   ]),
   wk(6, "Half Build", "2026-07-13", "Longest tempo yet. Race pace gets real.", [
     { d: 1, type: "tempo", title: "Tempo", detail: "1 mi easy → 2 mi continuous @ tempo → 1 mi easy.", miles: 4 },
     { d: 2, type: "easy", title: "Easy run", detail: "4 mi conversational.", miles: 4 },
     XT(3),
     STR(4),
-    { d: 6, type: "long", title: "Long run", detail: "9 mi relaxed. Fuel mid-run (gel or chews around mile 5).", miles: 9 }
+    { d: 6, type: "long", title: "Long run", detail: "10 mi relaxed. Fuel mid-run (gel or chews around mile 5).", miles: 10 }
   ]),
   wk(7, "Half Build", "2026-07-20", "Peak week of the half build.", [
     { d: 1, type: "intervals", title: "Intervals", detail: "1 mi easy → 3×(1 mi @ 8:50–9:00, 3 min jog) → ½ mi easy. ~4.5 mi.", miles: 4.5 },
     { d: 2, type: "easy", title: "Easy run", detail: "3 mi conversational.", miles: 3 },
     XT(3),
     { d: 4, type: "easy", title: "Easy run", detail: "2 mi very relaxed.", miles: 2 },
-    { d: 6, type: "long", title: "Long run — peak", detail: "11 mi relaxed. Longest run before race day. Full dress rehearsal: shoes, fuel, fluids.", miles: 11 }
+    { d: 6, type: "long", title: "Long run — peak", detail: "12 mi relaxed. Longest run before race day. Full dress rehearsal: shoes, fuel, fluids.", miles: 12 }
   ]),
   wk(8, "Half Build", "2026-07-27", "Taper begins. Volume drops, sharpness stays.", [
     { d: 1, type: "tempo", title: "Race-pace tempo", detail: "1 mi easy → 2 mi @ half race pace (9:09) → 1 mi easy.", miles: 4 },

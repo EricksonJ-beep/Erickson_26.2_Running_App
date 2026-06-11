@@ -8,6 +8,7 @@ import {
 } from "@/lib/storage";
 
 const PHASE_COLOR: Record<Phase, string> = {
+  "Base": "bg-dust",
   "Half Build": "bg-gold",
   "Recovery Bridge": "bg-sage",
   "Marathon Build": "bg-ember",
@@ -174,7 +175,7 @@ export default function ProgressView() {
           ))}
         </div>
         <div className="flex justify-between text-[10px] text-dust mt-1.5">
-          <span>Wk 1</span>
+          <span>Wk 0</span>
           <span>Half · Wk 9</span>
           <span>Wk 18 · 26.2</span>
         </div>
