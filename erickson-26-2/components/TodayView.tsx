@@ -6,6 +6,7 @@ import {
   daysUntil, findWeek, nextWorkout, todayISO, workoutOn, Workout
 } from "@/lib/plan";
 import { hrGuide } from "@/lib/zones";
+import { quoteForDate } from "@/lib/quotes";
 import { getDone, getProfile, getRuns, paceOf, toggleDone } from "@/lib/storage";
 
 const TYPE_PACE: Record<string, keyof typeof PACES | null> = {
@@ -37,6 +38,9 @@ export default function TodayView({ onGoLog }: { onGoLog: () => void }) {
 
   return (
     <div className="space-y-4">
+      {/* Daily fire — quote of the day, scrolling ticker */}
+      <DailyFire dateISO={today} />
+
       {/* Race day banner */}
       {isRace && (
         <div className="stripe rounded-xl px-5 py-4">
@@ -216,6 +220,34 @@ export default function TodayView({ onGoLog }: { onGoLog: () => void }) {
       )}
 
       {week && <WeekMeter weekStart={week.start} planned={week.plannedMiles} />}
+    </div>
+  );
+}
+
+function DailyFire({ dateISO }: { dateISO: string }) {
+  const q = quoteForDate(dateISO);
+  const line = `"${q.text}"  —  ${q.who}`;
+  // Longer quotes scroll slower so they stay readable
+  const duration = `${Math.max(14, Math.round(line.length / 4))}s`;
+  return (
+    <div className="bg-coal rounded-xl border border-gold/40 overflow-hidden">
+      <div className="flex items-center">
+        <div className="shrink-0 px-3 py-2.5 bg-gold/15 border-r border-gold/30">
+          <span className="font-display font-bold text-[10px] tracking-[0.18em] uppercase text-gold leading-none">
+            Daily<br />Fire
+          </span>
+        </div>
+        <div className="marquee flex-1 py-2.5">
+          <div className="marquee-inner" style={{ animationDuration: duration }}>
+            <span className="px-4 font-display font-semibold text-base text-bone">
+              {line}
+            </span>
+            <span aria-hidden className="marquee-dup px-4 font-display font-semibold text-base text-bone">
+              {line}
+            </span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
