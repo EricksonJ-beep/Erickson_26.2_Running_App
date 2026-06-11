@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { PLAN, Phase, daysUntil, findWeek, todayISO } from "@/lib/plan";
 import { computeZones, methodLabel } from "@/lib/zones";
 import {
-  exportAll, getDone, getProfile, getRuns, importAll, paceOf, saveProfile, Profile
+  exportAll, getBody, getDone, getProfile, getRuns, importAll, paceOf, saveProfile, Profile
 } from "@/lib/storage";
 
 const PHASE_COLOR: Record<Phase, string> = {
@@ -181,6 +181,9 @@ export default function ProgressView() {
         </div>
       </div>
 
+      {/* Body composition — seeded from scale screenshots */}
+      <BodyCard />
+
       {/* HR zones — computed from profile */}
       <div className="bg-coal rounded-2xl border border-seam p-5">
         <h2 className="font-display font-bold text-xl text-bone">HR zones</h2>
@@ -249,6 +252,88 @@ export default function ProgressView() {
       </div>
     </div>
   );
+}
+
+function BodyCard() {
+  const entries = Object.values(getBody()).sort((a, b) => (a.date < b.date ? 1 : -1));
+  if (entries.length === 0) return null;
+  const latest = entries[0];
+  const prev = entries[1];
+  const delta = prev ? latest.weight - prev.weight : null;
+
+  return (
+    <div className="bg-coal rounded-2xl border border-seam p-5">
+      <h2 className="font-display font-bold text-xl text-bone">Body</h2>
+      <p className="text-[11px] text-dust mt-0.5">
+        Scale reading {fmtShortDate(latest.date)}. Single readings wobble — the trend is the signal.
+      </p>
+      <div className="grid grid-cols-2 gap-3 mt-3">
+        <div className="bg-ink rounded-lg px-3 py-2.5">
+          <div className="font-display font-bold text-2xl text-gold tabular-nums leading-none">
+            {latest.weight.toFixed(1)}
+            <span className="text-dust text-sm ml-1">lb</span>
+          </div>
+          <div className="text-[10px] text-dust mt-1">
+            Weight
+            {delta !== null && (
+              <span className={delta <= 0 ? "text-sage" : "text-ember"}>
+                {" "}· {delta > 0 ? "+" : ""}{delta.toFixed(1)} vs last
+              </span>
+            )}
+          </div>
+        </div>
+        {latest.bodyFat !== undefined && (
+          <div className="bg-ink rounded-lg px-3 py-2.5">
+            <div className="font-display font-bold text-2xl text-bone tabular-nums leading-none">
+              {latest.bodyFat.toFixed(1)}
+              <span className="text-dust text-sm ml-1">%</span>
+            </div>
+            <div className="text-[10px] text-dust mt-1">Body fat</div>
+          </div>
+        )}
+        {latest.muscleMass !== undefined && (
+          <div className="bg-ink rounded-lg px-3 py-2.5">
+            <div className="font-display font-bold text-2xl text-bone tabular-nums leading-none">
+              {latest.muscleMass.toFixed(1)}
+              <span className="text-dust text-sm ml-1">lb</span>
+            </div>
+            <div className="text-[10px] text-dust mt-1">Muscle mass</div>
+          </div>
+        )}
+        {latest.bmr !== undefined && (
+          <div className="bg-ink rounded-lg px-3 py-2.5">
+            <div className="font-display font-bold text-2xl text-bone tabular-nums leading-none">
+              {latest.bmr}
+              <span className="text-dust text-sm ml-1">kcal</span>
+            </div>
+            <div className="text-[10px] text-dust mt-1">BMR — fuel floor, before any running</div>
+          </div>
+        )}
+      </div>
+      {entries.length > 1 && (
+        <div className="mt-3 space-y-1">
+          {entries.slice(0, 8).map((e) => (
+            <div key={e.date} className="flex items-baseline gap-3 text-sm bg-ink rounded-lg px-3 py-1.5">
+              <span className="text-xs text-dust w-16 shrink-0">{fmtShortDate(e.date)}</span>
+              <span className="font-display font-semibold text-bone tabular-nums">
+                {e.weight.toFixed(1)} lb
+              </span>
+              {e.bodyFat !== undefined && (
+                <span className="text-xs text-dust tabular-nums">{e.bodyFat.toFixed(1)}% bf</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function fmtShortDate(iso: string): string {
+  return new Date(iso + "T12:00:00").toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric"
+  });
 }
 
 function ProfileCard({ onSaved }: { onSaved: () => void }) {

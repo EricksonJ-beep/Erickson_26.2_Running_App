@@ -1,6 +1,6 @@
 "use client";
 
-import { SEED_RUNS } from "./seed";
+import { SEED_BODY, SEED_RUNS } from "./seed";
 
 // All data lives in localStorage on Jon's phone.
 // Export/import gives a JSON safety net.
@@ -30,10 +30,23 @@ export interface Profile {
   lthr?: number; // bpm, lactate threshold HR (Garmin estimate w/ strap)
 }
 
+// Scale readings (Renpho bioimpedance) — Jon screenshots them in chat,
+// Claude seeds them. Trend matters more than any single reading.
+export interface BodyLog {
+  date: string;
+  weight: number; // lb
+  bmi?: number;
+  bodyFat?: number; // %
+  muscleMass?: number; // lb
+  visceralFat?: number; // index
+  bmr?: number; // kcal
+}
+
 const RUNS_KEY = "hr_runs_v1";
 const FUEL_KEY = "hr_fuel_v1";
 const DONE_KEY = "hr_done_v1"; // workout date -> true (non-run completions: XT, strength)
 const PROFILE_KEY = "hr_profile_v1";
+const BODY_KEY = "hr_body_v1";
 const SEEDED_KEY = "hr_seeded_v1"; // seed entries already merged (date#rev -> true)
 
 function read<T>(key: string, fallback: T): T {
@@ -94,26 +107,41 @@ export function saveProfile(p: Profile) {
   write(PROFILE_KEY, p);
 }
 
-// Merge Claude-seeded runs (lib/seed.ts) into local data. Each seed entry
+export function getBody(): Record<string, BodyLog> {
+  return read(BODY_KEY, {});
+}
+
+// Merge Claude-seeded data (lib/seed.ts) into local storage. Each seed entry
 // applies once per rev: rev 1 only fills empty dates (phone data wins),
 // rev 2+ is a chat-supplied correction and overwrites.
 export function applySeed() {
   if (typeof window === "undefined") return;
   const seen = read<Record<string, boolean>>(SEEDED_KEY, {});
-  const runs = getRuns();
-  let runsChanged = false;
   let seenChanged = false;
-  for (const { rev, ...run } of SEED_RUNS) {
-    const key = `${run.date}#${rev ?? 1}`;
-    if (seen[key]) continue;
-    if (!runs[run.date] || (rev ?? 1) > 1) {
-      runs[run.date] = run;
-      runsChanged = true;
+
+  // Run seed keys predate body seeds and stay unprefixed for back-compat.
+  const merge = <T extends { date: string }>(
+    storageKey: string,
+    items: (T & { rev?: number })[],
+    prefix: string
+  ) => {
+    const all = read<Record<string, T>>(storageKey, {});
+    let changed = false;
+    for (const { rev, ...item } of items) {
+      const key = `${prefix}${item.date}#${rev ?? 1}`;
+      if (seen[key]) continue;
+      if (!all[item.date] || (rev ?? 1) > 1) {
+        all[item.date] = item as T;
+        changed = true;
+      }
+      seen[key] = true;
+      seenChanged = true;
     }
-    seen[key] = true;
-    seenChanged = true;
-  }
-  if (runsChanged) write(RUNS_KEY, runs);
+    if (changed) write(storageKey, all);
+  };
+
+  merge(RUNS_KEY, SEED_RUNS, "");
+  merge(BODY_KEY, SEED_BODY, "body:");
   if (seenChanged) write(SEEDED_KEY, seen);
 }
 
@@ -124,6 +152,7 @@ export function exportAll(): string {
       fuel: getFuel(),
       done: getDone(),
       profile: getProfile(),
+      body: getBody(),
       seeded: read(SEEDED_KEY, {})
     },
     null,
@@ -144,6 +173,7 @@ export function importAll(json: string): boolean {
     if (isRecord(data.fuel)) write(FUEL_KEY, data.fuel);
     if (isRecord(data.done)) write(DONE_KEY, data.done);
     if (isRecord(data.profile)) write(PROFILE_KEY, data.profile);
+    if (isRecord(data.body)) write(BODY_KEY, data.body);
     if (isRecord(data.seeded)) write(SEEDED_KEY, data.seeded);
     return true;
   } catch {

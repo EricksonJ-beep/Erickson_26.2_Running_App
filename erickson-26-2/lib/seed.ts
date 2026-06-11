@@ -1,4 +1,4 @@
-import type { RunLog } from "./storage";
+import type { BodyLog, RunLog } from "./storage";
 
 // ─────────────────────────────────────────────────────────────
 // CLAUDE-SEEDED RUNS — Jon reports runs in chat; Claude adds them
@@ -65,5 +65,20 @@ export const SEED_RUNS: SeedRun[] = [
     hr: 140,
     notes:
       "Treadmill @ 9:30. HR ~135 through 2 mi, drifted to 155 in mile 3 at the same pace — that pace is Z3 effort right now. Easy days should sit slower."
+  }
+];
+
+// Scale readings from Jon's Renpho screenshots — same rev rules as runs.
+export type SeedBody = BodyLog & { rev?: number };
+
+export const SEED_BODY: SeedBody[] = [
+  {
+    date: "2026-06-11",
+    weight: 204.2,
+    bmi: 28.0,
+    bodyFat: 23.6,
+    muscleMass: 148.2,
+    visceralFat: 10,
+    bmr: 1897
   }
 ];
