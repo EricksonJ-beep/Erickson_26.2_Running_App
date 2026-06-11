@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { todayISO } from "@/lib/plan";
+import { applySeed } from "@/lib/storage";
 import TodayView from "@/components/TodayView";
 import PlanView from "@/components/PlanView";
 import LogView from "@/components/LogView";
@@ -25,6 +26,7 @@ export default function Home() {
   // Re-key the views when the date changes so they remount fresh.
   const [day, setDay] = useState("");
   useEffect(() => {
+    applySeed(); // fold in any runs Jon reported via chat
     setDay(todayISO());
     const refresh = () => setDay(todayISO());
     window.addEventListener("focus", refresh);
