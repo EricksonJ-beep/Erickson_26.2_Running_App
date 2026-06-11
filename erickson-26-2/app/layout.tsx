@@ -42,7 +42,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `if('serviceWorker'in navigator)window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){})})`
+            __html: `try{if(localStorage.getItem('hr_theme_v1')==='light')document.documentElement.classList.add('light')}catch(e){}
+if('serviceWorker'in navigator)window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){})})`
           }}
         />
       </head>

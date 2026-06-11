@@ -22,6 +22,19 @@ type TabId = (typeof TABS)[number]["id"];
 export default function Home() {
   const [tab, setTab] = useState<TabId>("today");
 
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  useEffect(() => {
+    setTheme(document.documentElement.classList.contains("light") ? "light" : "dark");
+  }, []);
+  const flipTheme = () => {
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    document.documentElement.classList.toggle("light", next === "light");
+    try {
+      localStorage.setItem("hr_theme_v1", next);
+    } catch {}
+  };
+
   // A PWA left open overnight keeps stale "today" state in every view.
   // Re-key the views when the date changes so they remount fresh.
   const [day, setDay] = useState("");
@@ -46,8 +59,17 @@ export default function Home() {
             ERICKSON <span className="text-gold">26.2</span>
           </h1>
         </div>
-        <div className="text-right text-[11px] text-dust leading-tight font-medium">
-          13.1 · AUG 8<br />26.2 · OCT 10
+        <div className="flex items-center gap-3">
+          <div className="text-right text-[11px] text-dust leading-tight font-medium">
+            13.1 · AUG 8<br />26.2 · OCT 10
+          </div>
+          <button
+            onClick={flipTheme}
+            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            className="w-9 h-9 rounded-lg bg-coal border border-seam text-bone text-base leading-none"
+          >
+            {theme === "dark" ? "☀" : "☾"}
+          </button>
         </div>
       </header>
 

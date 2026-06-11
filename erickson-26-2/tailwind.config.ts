@@ -5,15 +5,16 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: "#0F0E0B",
-        coal: "#1A1814",
-        seam: "#2A2722",
-        bone: "#F2EBDA",
-        dust: "#9A917D",
-        gold: "#F2B707",
-        goldDim: "#B98C0A",
-        sage: "#7BA05B",
-        ember: "#D96B4A"
+        // RGB-triplet vars (globals.css) so html.light can swap the palette
+        ink: "rgb(var(--ink) / <alpha-value>)",
+        coal: "rgb(var(--coal) / <alpha-value>)",
+        seam: "rgb(var(--seam) / <alpha-value>)",
+        bone: "rgb(var(--bone) / <alpha-value>)",
+        dust: "rgb(var(--dust) / <alpha-value>)",
+        gold: "rgb(var(--gold) / <alpha-value>)",
+        goldDim: "rgb(var(--gold-dim) / <alpha-value>)",
+        sage: "rgb(var(--sage) / <alpha-value>)",
+        ember: "rgb(var(--ember) / <alpha-value>)"
       },
       fontFamily: {
         display: ["var(--font-display)", "Barlow Condensed", "Arial Narrow", "sans-serif"],

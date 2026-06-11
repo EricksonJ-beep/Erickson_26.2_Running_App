@@ -2,23 +2,55 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Palette as RGB triplets so Tailwind opacity modifiers keep working.
+   Dark is the default; html.light swaps the set. */
 :root {
   color-scheme: dark;
+  --ink: 15 14 11;
+  --coal: 26 24 20;
+  --seam: 42 39 34;
+  --bone: 242 235 218;
+  --dust: 154 145 125;
+  --gold: 242 183 7;
+  --gold-dim: 185 140 10;
+  --sage: 123 160 91;
+  --ember: 217 107 74;
+}
+
+html.light {
+  color-scheme: light;
+  --ink: 247 243 232; /* page background — warm paper */
+  --coal: 255 253 246; /* cards */
+  --seam: 226 220 203; /* borders */
+  --bone: 31 28 21; /* primary text */
+  --dust: 122 115 97; /* secondary text */
+  --gold: 154 117 6; /* deepened for contrast on light */
+  --gold-dim: 122 93 5;
+  --sage: 78 114 48;
+  --ember: 192 78 43;
 }
 
 html, body {
-  background: #0F0E0B;
-  color: #F2EBDA;
+  background: rgb(var(--ink));
+  color: rgb(var(--bone));
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Hornet stripe — the signature mark */
+/* Hornet stripe — the signature mark, identical in both themes */
 .stripe {
   background: repeating-linear-gradient(
     -55deg,
     #F2B707 0px, #F2B707 10px,
     #0F0E0B 10px, #0F0E0B 20px
   );
+}
+
+/* Text sitting directly on the stripe keeps its dark-mode color */
+.on-stripe {
+  color: #0F0E0B;
+}
+.on-stripe-soft {
+  color: rgb(15 14 11 / 0.8);
 }
 
 input[type="number"], input[type="text"], textarea, select {
