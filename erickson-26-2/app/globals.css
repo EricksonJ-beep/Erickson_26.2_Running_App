@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html, body {
+  background: #0F0E0B;
+  color: #F2EBDA;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Hornet stripe — the signature mark */
+.stripe {
+  background: repeating-linear-gradient(
+    -55deg,
+    #F2B707 0px, #F2B707 10px,
+    #0F0E0B 10px, #0F0E0B 20px
+  );
+}
+
+input[type="number"], input[type="text"], textarea, select {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
