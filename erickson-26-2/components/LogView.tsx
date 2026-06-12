@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { todayISO, workoutOn } from "@/lib/plan";
+import { TYPE_EFFORT } from "@/lib/guide";
 import { deleteRun, getRuns, paceOf, RunLog, saveRun } from "@/lib/storage";
 
 export default function LogView() {
@@ -26,6 +27,8 @@ export default function LogView() {
   if (!date) return null;
 
   const runs = getRuns();
+  const plannedToday = workoutOn(date);
+  const targetEffort = plannedToday ? TYPE_EFFORT[plannedToday.type] : undefined;
   const history = Object.values(runs).sort((a, b) => (a.date < b.date ? 1 : -1));
   const displayHistory = showAll ? history : history.slice(0, 7);
 
@@ -187,6 +190,9 @@ export default function LogView() {
           <div className="flex justify-between items-baseline">
             <span className="text-[11px] uppercase tracking-widest text-dust font-display font-semibold">
               Effort (RPE)
+              {targetEffort && (
+                <span className="normal-case tracking-normal font-body font-normal"> · target {targetEffort}</span>
+              )}
             </span>
             <span className="font-display font-bold text-gold text-lg">{rpe}</span>
           </div>

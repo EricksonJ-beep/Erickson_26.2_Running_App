@@ -6,6 +6,7 @@ import {
   daysUntil, findWeek, nextWorkout, todayISO, workoutOn, Workout
 } from "@/lib/plan";
 import { hrGuide } from "@/lib/zones";
+import { TYPE_EFFORT } from "@/lib/guide";
 import { quoteForDate } from "@/lib/quotes";
 import { getDone, getProfile, getRuns, paceOf, toggleDone } from "@/lib/storage";
 
@@ -152,6 +153,16 @@ export default function TodayView({ onGoLog }: { onGoLog: () => void }) {
                     </div>
                     <p className="text-xs text-dust mt-1">{PACE_NOTES[paceKey]}</p>
                   </div>
+                  {TYPE_EFFORT[workout.type] && (
+                    <div className="border-t border-seam pt-2.5 flex items-baseline justify-between">
+                      <span className="text-[11px] uppercase tracking-widest text-dust font-display font-semibold">
+                        Target effort
+                      </span>
+                      <span className="font-display font-bold text-xl text-bone tabular-nums">
+                        {TYPE_EFFORT[workout.type]}<span className="text-dust text-sm"> /10</span>
+                      </span>
+                    </div>
+                  )}
                   <div className="border-t border-seam pt-2.5">
                     <div className="flex items-baseline justify-between">
                       <span className="text-[11px] uppercase tracking-widest text-dust font-display font-semibold">

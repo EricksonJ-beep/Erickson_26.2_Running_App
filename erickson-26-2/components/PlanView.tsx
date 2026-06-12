@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { PLAN, findWeek, todayISO, Workout } from "@/lib/plan";
+import { EFFORT_GUIDE, RACE_INTEL, ROADBLOCKS } from "@/lib/guide";
 import { getDone, getRuns } from "@/lib/storage";
 
 const TYPE_DOT: Record<string, string> = {
@@ -152,6 +153,82 @@ export default function PlanView() {
           </div>
         );
       })}
+
+      {/* Coach's guide — reference material behind the plan */}
+      <div className="pt-4">
+        <div className="text-[10px] uppercase tracking-widest text-dust font-display font-semibold px-1 mb-2">
+          Coach&apos;s guide
+        </div>
+        <div className="space-y-2">
+          {RACE_INTEL.map((r) => (
+            <GuideCard key={r.title} title={r.title}>
+              <div className="text-[11px] text-dust mb-2">{r.race}</div>
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                {r.facts.map((f) => (
+                  <div key={f.label} className="bg-ink rounded-lg px-3 py-2">
+                    <div className="text-[10px] uppercase tracking-widest text-dust font-display font-semibold">
+                      {f.label}
+                    </div>
+                    <div className="text-sm text-bone font-semibold leading-snug">{f.value}</div>
+                    <div className="text-[10px] text-dust">{f.note}</div>
+                  </div>
+                ))}
+              </div>
+              <ul className="space-y-1.5">
+                {r.takeaways.map((t) => (
+                  <li key={t} className="text-xs text-bone/85 leading-snug flex gap-2">
+                    <span className="text-gold shrink-0">→</span>
+                    <span>{t}</span>
+                  </li>
+                ))}
+              </ul>
+            </GuideCard>
+          ))}
+
+          <GuideCard title="How each run should feel">
+            <div className="space-y-2.5">
+              {EFFORT_GUIDE.map((e) => (
+                <div key={e.type}>
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-sm text-bone font-semibold">{e.label}</span>
+                    <span className="font-display font-bold text-gold tabular-nums">
+                      {e.rpe}<span className="text-dust text-xs"> /10</span>
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-dust leading-snug mt-0.5">{e.feel}</p>
+                </div>
+              ))}
+            </div>
+          </GuideCard>
+
+          <GuideCard title="When it goes sideways">
+            <div className="space-y-2.5">
+              {ROADBLOCKS.map((r) => (
+                <div key={r.when}>
+                  <div className="text-sm text-bone font-semibold">{r.when}</div>
+                  <p className="text-[11px] text-dust leading-snug mt-0.5">{r.play}</p>
+                </div>
+              ))}
+            </div>
+          </GuideCard>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GuideCard({ title, children }: { title: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rounded-xl border border-seam bg-coal overflow-hidden">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full px-4 py-3 flex items-center justify-between text-left"
+      >
+        <span className="font-display font-bold text-bone">{title}</span>
+        <span className="text-dust text-sm">{open ? "−" : "+"}</span>
+      </button>
+      {open && <div className="px-4 pb-4">{children}</div>}
     </div>
   );
 }

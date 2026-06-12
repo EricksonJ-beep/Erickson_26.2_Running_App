@@ -155,14 +155,14 @@ export const PLAN: Week[] = [
     { d: 2, type: "easy", title: "Easy run", detail: "4 mi conversational.", miles: 4 },
     XT(3),
     STR(4),
-    { d: 6, type: "long", title: "Long run", detail: "10 mi relaxed. Fuel mid-run (gel or chews around mile 5).", miles: 10 }
+    { d: 6, type: "long", title: "Long run", detail: "10 mi relaxed on a rolling route — Chippewa's mile-5 hill is coming. Fuel mid-run (gel or chews around mile 5).", miles: 10 }
   ]),
   wk(7, "Half Build", "2026-07-20", "Peak week of the half build.", [
     { d: 1, type: "intervals", title: "Intervals", detail: "1 mi easy → 3×(1 mi @ 8:50–9:00, 3 min jog) → ½ mi easy. ~4.5 mi.", miles: 4.5 },
     { d: 2, type: "easy", title: "Easy run", detail: "3 mi conversational.", miles: 3 },
     XT(3),
     { d: 4, type: "easy", title: "Easy run", detail: "2 mi very relaxed.", miles: 2 },
-    { d: 6, type: "long", title: "Long run — peak", detail: "12 mi relaxed. Longest run before race day. Full dress rehearsal: shoes, fuel, fluids.", miles: 12 }
+    { d: 6, type: "long", title: "Long run — peak", detail: "12 mi relaxed on a rolling route. Longest run before race day. Full dress rehearsal: shoes, fuel, fluids — and practice quick light steps on the downhills.", miles: 12 }
   ]),
   wk(8, "Half Build", "2026-07-27", "Taper begins. Volume drops, sharpness stays.", [
     { d: 1, type: "tempo", title: "Race-pace tempo", detail: "1 mi easy → 2 mi @ half race pace (9:09) → 1 mi easy.", miles: 4 },
@@ -173,7 +173,7 @@ export const PLAN: Week[] = [
   wk(9, "Race Week", "2026-08-03", "Chippewa Falls. Trust the work.", [
     { d: 1, type: "easy", title: "Easy + strides", detail: "3 mi easy + 4×20-sec strides. Legs stay awake, nothing more.", miles: 3 },
     { d: 3, type: "easy", title: "Shakeout", detail: "2 mi very easy.", miles: 2 },
-    { d: 5, type: "race", title: "HALF MARATHON — Chippewa Falls", detail: "13.1 @ 9:09 goal pace. Even splits; bank nothing. Hydrate every station.", miles: 13.1 }
+    { d: 5, type: "race", title: "HALF MARATHON — Chippewa Falls", detail: "13.1 @ 9:09 average. Even effort, not even splits: give time back on the mile 4–5 hill, collect it on the descent. Save a gear for the uphill finish. Hydrate every station.", miles: 13.1 }
   ]),
 
   // ── PHASE 2 · RECOVERY BRIDGE ──
