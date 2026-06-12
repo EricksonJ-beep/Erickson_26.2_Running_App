@@ -51,7 +51,16 @@ export interface BodyLog {
   bmr?: number; // kcal
 }
 
+// Daily pushup/situp counts — the goal is 100 of each, every day.
+export interface CalisLog {
+  pushups: number;
+  situps: number;
+}
+
+export const CALIS_GOAL = 100;
+
 const RUNS_KEY = "hr_runs_v1";
+const CALIS_KEY = "hr_calis_v1";
 const FUEL_KEY = "hr_fuel_v1";
 const DONE_KEY = "hr_done_v1"; // workout date -> true (non-run completions: XT, strength)
 const PROFILE_KEY = "hr_profile_v1";
@@ -120,6 +129,17 @@ export function getBody(): Record<string, BodyLog> {
   return read(BODY_KEY, {});
 }
 
+export function getCalis(): Record<string, CalisLog> {
+  return read(CALIS_KEY, {});
+}
+export function addCalis(date: string, kind: keyof CalisLog, delta: number) {
+  const all = getCalis();
+  const day = all[date] ?? { pushups: 0, situps: 0 };
+  day[kind] = Math.max(0, day[kind] + delta);
+  all[date] = day;
+  write(CALIS_KEY, all);
+}
+
 // Merge Claude-seeded data (lib/seed.ts) into local storage. Each seed entry
 // applies once per rev: rev 1 only fills empty dates (phone data wins),
 // rev 2+ is a chat-supplied correction and overwrites.
@@ -162,6 +182,7 @@ export function exportAll(): string {
       done: getDone(),
       profile: getProfile(),
       body: getBody(),
+      calis: getCalis(),
       seeded: read(SEEDED_KEY, {})
     },
     null,
@@ -183,6 +204,7 @@ export function importAll(json: string): boolean {
     if (isRecord(data.done)) write(DONE_KEY, data.done);
     if (isRecord(data.profile)) write(PROFILE_KEY, data.profile);
     if (isRecord(data.body)) write(BODY_KEY, data.body);
+    if (isRecord(data.calis)) write(CALIS_KEY, data.calis);
     if (isRecord(data.seeded)) write(SEEDED_KEY, data.seeded);
     return true;
   } catch {

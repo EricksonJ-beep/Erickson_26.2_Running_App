@@ -9,7 +9,9 @@ import { hrGuide } from "@/lib/zones";
 import { TYPE_EFFORT } from "@/lib/guide";
 import RunView from "@/components/RunView";
 import { quoteForDate } from "@/lib/quotes";
-import { getDone, getProfile, getRuns, paceOf, toggleDone } from "@/lib/storage";
+import {
+  addCalis, CALIS_GOAL, getCalis, getDone, getProfile, getRuns, paceOf, toggleDone
+} from "@/lib/storage";
 
 const TYPE_PACE: Record<string, keyof typeof PACES | null> = {
   easy: "easy", long: "long", tempo: "tempo", intervals: "intervals", race: "halfRace"
@@ -231,6 +233,9 @@ export default function TodayView({ onGoLog }: { onGoLog: () => void }) {
         </div>
       </div>
 
+      {/* The daily 100s — pushups & situps */}
+      <Hundreds dateISO={today} />
+
       {/* Up next */}
       {upNext && upNext.date !== today && (
         <div className="bg-coal rounded-xl px-4 py-3 border border-seam flex items-center justify-between">
@@ -252,6 +257,80 @@ export default function TodayView({ onGoLog }: { onGoLog: () => void }) {
       )}
 
       {week && <WeekMeter weekStart={week.start} planned={week.plannedMiles} />}
+    </div>
+  );
+}
+
+function Hundreds({ dateISO }: { dateISO: string }) {
+  const [, bump] = useState(0);
+  const day = getCalis()[dateISO] ?? { pushups: 0, situps: 0 };
+  const bothDone = day.pushups >= CALIS_GOAL && day.situps >= CALIS_GOAL;
+
+  const add = (kind: "pushups" | "situps", n: number) => {
+    addCalis(dateISO, kind, n);
+    bump((x) => x + 1);
+  };
+
+  return (
+    <div className="bg-coal rounded-2xl border border-seam px-4 py-4">
+      <div className="flex items-center justify-between">
+        <div className="text-[11px] uppercase tracking-widest text-dust font-display font-semibold">
+          The daily 100s
+        </div>
+        {bothDone && (
+          <span className="text-[10px] font-display font-bold tracking-widest uppercase bg-sage/20 text-sage rounded px-1.5 py-0.5">
+            Both done ✓
+          </span>
+        )}
+      </div>
+
+      {(["pushups", "situps"] as const).map((kind) => {
+        const count = day[kind];
+        const hit = count >= CALIS_GOAL;
+        const pct = Math.min(100, (count / CALIS_GOAL) * 100);
+        return (
+          <div key={kind} className="mt-3">
+            <div className="flex items-baseline justify-between">
+              <span className="text-sm text-bone font-semibold capitalize">{kind}</span>
+              <span
+                className={`font-display font-bold text-2xl tabular-nums ${
+                  hit ? "text-sage" : "text-gold"
+                }`}
+              >
+                {count}
+                <span className="text-dust text-sm font-semibold"> /{CALIS_GOAL}</span>
+              </span>
+            </div>
+            <div className="mt-1.5 h-1.5 bg-ink rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${hit ? "bg-sage" : "bg-gold"}`}
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+            <div className="mt-2 flex gap-2">
+              <button
+                onClick={() => add(kind, -10)}
+                aria-label={`Remove 10 ${kind}`}
+                className="w-14 min-h-[48px] bg-ink border border-seam rounded-lg text-dust font-display font-bold text-sm"
+              >
+                −10
+              </button>
+              <button
+                onClick={() => add(kind, 10)}
+                className="flex-1 min-h-[48px] bg-ink border border-seam rounded-lg text-bone font-display font-bold text-sm"
+              >
+                +10
+              </button>
+              <button
+                onClick={() => add(kind, 25)}
+                className="flex-1 min-h-[48px] bg-ink border border-seam rounded-lg text-bone font-display font-bold text-sm"
+              >
+                +25
+              </button>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
