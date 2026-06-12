@@ -49,6 +49,17 @@ export const PACES = {
   marathon: "9:35–9:45 /mi"
 };
 
+// Numeric twins of PACES in seconds per mile, for live pace judgment
+// in Run Mode. Race targets get a ±10 sec band around goal pace.
+export const PACE_BANDS: Record<keyof typeof PACES, { lo: number; hi: number }> = {
+  easy: { lo: 645, hi: 690 },
+  long: { lo: 630, hi: 675 },
+  tempo: { lo: 545, hi: 555 },
+  intervals: { lo: 500, hi: 515 },
+  halfRace: { lo: 539, hi: 559 },
+  marathon: { lo: 575, hi: 585 }
+};
+
 // HR zones + per-workout targets now live in lib/zones.ts,
 // computed from the profile (Settings on the Progress tab).
 

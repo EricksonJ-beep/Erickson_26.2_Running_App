@@ -5,6 +5,13 @@ import { SEED_BODY, SEED_RUNS } from "./seed";
 // All data lives in localStorage on Jon's phone.
 // Export/import gives a JSON safety net.
 
+// GPS breadcrumb from Run Mode. t = seconds since run start.
+export interface RoutePoint {
+  lat: number;
+  lng: number;
+  t: number;
+}
+
 export interface RunLog {
   date: string;
   miles: number;
@@ -12,6 +19,8 @@ export interface RunLog {
   rpe: number; // 1-10
   hr?: number; // avg heart rate, bpm
   notes: string;
+  route?: RoutePoint[]; // Run Mode GPS trace, downsampled
+  splits?: number[]; // per-mile seconds, Run Mode
 }
 
 export interface FuelLog {

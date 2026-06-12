@@ -87,34 +87,51 @@ export interface HRGuide {
   note: string;
 }
 
+export type HRBandKey = "easy" | "long" | "tempo" | "intervals" | "halfRace" | "marathon";
+
+// Numeric target window per workout type — the single source the string
+// guide and Run Mode's live judgment both build from.
+export function hrBand(p: Profile, key: HRBandKey): { lo: number; hi: number } {
+  const [, z2, z3, z4, z5] = computeZones(p);
+  switch (key) {
+    case "easy": return { lo: z2.lo, hi: z2.hi };
+    case "long": return { lo: z2.lo, hi: z2.hi + 4 }; // allows late-run drift
+    case "tempo": return { lo: z4.lo, hi: z4.hi };
+    case "intervals": return { lo: z5.lo, hi: z5.hi };
+    case "halfRace": return { lo: z4.lo + 2, hi: z4.hi + 2 };
+    case "marathon": return { lo: z3.lo, hi: z3.hi };
+  }
+}
+
 // Target windows + coaching notes per workout type, derived from live zones.
 export function hrGuide(p: Profile): Record<string, HRGuide> {
-  const [, z2, z3, z4, z5] = computeZones(p);
-  const drift = z2.hi + 4;
+  const band = (k: HRBandKey) => hrBand(p, k);
+  const easy = band("easy"), long = band("long"), tempo = band("tempo");
+  const intervals = band("intervals"), half = band("halfRace"), mar = band("marathon");
   return {
     easy: {
-      target: `${z2.lo}–${z2.hi} bpm (Z2)`,
-      note: `If HR climbs past ${z2.hi}, walk 30 sec. Pace ego aside — the zone is the workout.`
+      target: `${easy.lo}–${easy.hi} bpm (Z2)`,
+      note: `If HR climbs past ${easy.hi}, walk 30 sec. Pace ego aside — the zone is the workout.`
     },
     long: {
-      target: `${z2.lo}–${drift} bpm (Z2)`,
-      note: `Stay Z2. Late-run drift to ~${drift} in heat is normal; above that, ease off.`
+      target: `${long.lo}–${long.hi} bpm (Z2)`,
+      note: `Stay Z2. Late-run drift to ~${long.hi} in heat is normal; above that, ease off.`
     },
     tempo: {
-      target: `${z4.lo}–${z4.hi} bpm (Z4)`,
+      target: `${tempo.lo}–${tempo.hi} bpm (Z4)`,
       note: "Settle into Z4 by the second tempo mile. HR lags effort by a minute."
     },
     intervals: {
-      target: `${z5.lo}–${z5.hi} bpm (Z5)`,
+      target: `${intervals.lo}–${intervals.hi} bpm (Z5)`,
       note: "Run reps by effort/pace — HR lags too much on short reps. Check it on recoveries."
     },
     halfRace: {
-      target: `${z4.lo + 2}–${z4.hi + 2} bpm`,
+      target: `${half.lo}–${half.hi} bpm`,
       note: "Expect Z4 most of the race, Z5 in the final miles."
     },
     marathon: {
-      target: `${z3.lo}–${z3.hi} bpm (Z3)`,
-      note: `Discipline zone. The ${z3.hi} bpm cap for 20 miles is what makes the last 10K possible.`
+      target: `${mar.lo}–${mar.hi} bpm (Z3)`,
+      note: `Discipline zone. The ${mar.hi} bpm cap for 20 miles is what makes the last 10K possible.`
     }
   };
 }

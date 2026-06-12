@@ -7,6 +7,7 @@ import {
 } from "@/lib/plan";
 import { hrGuide } from "@/lib/zones";
 import { TYPE_EFFORT } from "@/lib/guide";
+import RunView from "@/components/RunView";
 import { quoteForDate } from "@/lib/quotes";
 import { getDone, getProfile, getRuns, paceOf, toggleDone } from "@/lib/storage";
 
@@ -16,6 +17,7 @@ const TYPE_PACE: Record<string, keyof typeof PACES | null> = {
 
 export default function TodayView({ onGoLog }: { onGoLog: () => void }) {
   const [today, setToday] = useState("");
+  const [runMode, setRunMode] = useState(false);
   const [, force] = useState(0);
   useEffect(() => setToday(todayISO()), []);
   if (!today) return null;
@@ -39,6 +41,17 @@ export default function TodayView({ onGoLog }: { onGoLog: () => void }) {
 
   return (
     <div className="space-y-4">
+      {/* Run Mode — fullscreen takeover, covers the tab bar */}
+      {runMode && workout && (
+        <RunView
+          workout={workout}
+          onClose={() => {
+            setRunMode(false);
+            force((n) => n + 1);
+          }}
+        />
+      )}
+
       {/* Daily fire — quote of the day, scrolling ticker */}
       <DailyFire dateISO={today} />
 
@@ -179,13 +192,21 @@ export default function TodayView({ onGoLog }: { onGoLog: () => void }) {
                 </div>
               )}
 
-              <div className="mt-4 flex gap-2">
+              {workout.miles > 0 && (
+                <button
+                  onClick={() => setRunMode(true)}
+                  className="mt-4 w-full bg-gold text-ink font-display font-bold tracking-widest uppercase rounded-lg py-4 text-base min-h-[48px]"
+                >
+                  ▶ Start run
+                </button>
+              )}
+              <div className="mt-2 flex gap-2">
                 {workout.miles > 0 ? (
                   <button
                     onClick={onGoLog}
-                    className="flex-1 bg-gold text-ink font-display font-bold tracking-widest uppercase rounded-lg py-3 text-sm"
+                    className="flex-1 bg-coal border border-seam text-bone font-display font-bold tracking-widest uppercase rounded-lg py-3 text-sm"
                   >
-                    {logged ? "Update log →" : "Log this run"}
+                    {logged ? "Update log →" : "Log manually"}
                   </button>
                 ) : (
                   <button
