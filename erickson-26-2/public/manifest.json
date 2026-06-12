@@ -4,8 +4,8 @@
   "description": "Road to Chippewa Falls 13.1 and Ashland 26.2",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0F0E0B",
-  "theme_color": "#0F0E0B",
+  "background_color": "#0A0B09",
+  "theme_color": "#0A0B09",
   "icons": [
     {
       "src": "/icon-192.png",

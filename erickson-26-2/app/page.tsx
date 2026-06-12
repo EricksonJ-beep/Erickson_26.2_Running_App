@@ -54,7 +54,7 @@ export default function Home() {
     <div className="mx-auto max-w-md min-h-screen flex flex-col">
       <header className="px-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-3 flex items-end justify-between">
         <div>
-          <div className="stripe h-1.5 w-16 mb-2 rounded-sm" />
+          <div className="bg-gold h-1.5 w-16 mb-2 rounded-sm" />
           <h1 className="font-display font-bold text-3xl tracking-wide text-bone leading-none">
             ERICKSON <span className="text-gold">26.2</span>
           </h1>

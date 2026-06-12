@@ -43,11 +43,11 @@ export default function TodayView({ onGoLog }: { onGoLog: () => void }) {
 
       {/* Race day banner */}
       {isRace && (
-        <div className="stripe rounded-xl px-5 py-4">
-          <div className="font-display font-bold text-2xl on-stripe tracking-widest uppercase leading-none">
+        <div className="bg-gold rounded-xl px-5 py-4">
+          <div className="font-display font-bold text-2xl text-ink tracking-widest uppercase leading-none">
             Race Day
           </div>
-          <div className="on-stripe-soft text-sm font-semibold mt-1">
+          <div className="text-ink/80 text-sm font-semibold mt-1">
             You've put in the work. Go get it, Jon.
           </div>
         </div>
@@ -72,7 +72,7 @@ export default function TodayView({ onGoLog }: { onGoLog: () => void }) {
 
       {/* Today's bib */}
       <div className="bg-coal rounded-2xl border border-seam overflow-hidden">
-        <div className="stripe h-2" />
+        <div className="bg-gold h-2" />
         <div className="p-5">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">

@@ -2,55 +2,39 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Palette as RGB triplets so Tailwind opacity modifiers keep working.
-   Dark is the default; html.light swaps the set. */
+/* VOLT — jet black + electric lime. Palette as RGB triplets so Tailwind
+   opacity modifiers keep working. Dark is the default; html.light swaps.
+   Token names kept from the original theme ("gold" = primary accent). */
 :root {
   color-scheme: dark;
-  --ink: 15 14 11;
-  --coal: 26 24 20;
-  --seam: 42 39 34;
-  --bone: 242 235 218;
-  --dust: 154 145 125;
-  --gold: 242 183 7;
-  --gold-dim: 185 140 10;
-  --sage: 123 160 91;
-  --ember: 217 107 74;
+  --ink: 10 11 9; /* page — jet black */
+  --coal: 21 23 18; /* cards — soft charcoal */
+  --seam: 38 41 33; /* borders */
+  --bone: 244 246 239; /* primary text — cool off-white */
+  --dust: 142 148 134; /* secondary text */
+  --gold: 200 245 66; /* VOLT — primary accent */
+  --gold-dim: 143 181 46;
+  --sage: 79 209 165; /* success / logged — mint */
+  --ember: 255 107 74; /* warnings / heat — coral */
 }
 
 html.light {
   color-scheme: light;
-  --ink: 247 243 232; /* page background — warm paper */
-  --coal: 255 253 246; /* cards */
-  --seam: 226 220 203; /* borders */
-  --bone: 31 28 21; /* primary text */
-  --dust: 122 115 97; /* secondary text */
-  --gold: 154 117 6; /* deepened for contrast on light */
-  --gold-dim: 122 93 5;
-  --sage: 78 114 48;
-  --ember: 192 78 43;
+  --ink: 246 247 242; /* page background */
+  --coal: 255 255 255; /* cards */
+  --seam: 227 230 219; /* borders */
+  --bone: 24 27 20; /* primary text */
+  --dust: 110 116 101; /* secondary text */
+  --gold: 95 128 0; /* volt deepened to olive for contrast */
+  --gold-dim: 75 100 10;
+  --sage: 30 140 100;
+  --ember: 212 74 40;
 }
 
 html, body {
   background: rgb(var(--ink));
   color: rgb(var(--bone));
   -webkit-tap-highlight-color: transparent;
-}
-
-/* Hornet stripe — the signature mark, identical in both themes */
-.stripe {
-  background: repeating-linear-gradient(
-    -55deg,
-    #F2B707 0px, #F2B707 10px,
-    #0F0E0B 10px, #0F0E0B 20px
-  );
-}
-
-/* Text sitting directly on the stripe keeps its dark-mode color */
-.on-stripe {
-  color: #0F0E0B;
-}
-.on-stripe-soft {
-  color: rgb(15 14 11 / 0.8);
 }
 
 input[type="number"], input[type="text"], textarea, select {

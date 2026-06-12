@@ -196,7 +196,7 @@ export default function LogView() {
             max={10}
             value={rpe}
             onChange={(e) => setRpe(parseInt(e.target.value))}
-            className="w-full mt-1 accent-[#F2B707]"
+            className="w-full mt-1 accent-gold"
           />
           <div className="flex justify-between text-[10px] text-dust">
             <span>easy chat</span>

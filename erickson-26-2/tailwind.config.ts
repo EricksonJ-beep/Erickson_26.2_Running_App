@@ -17,7 +17,7 @@ const config: Config = {
         ember: "rgb(var(--ember) / <alpha-value>)"
       },
       fontFamily: {
-        display: ["var(--font-display)", "Barlow Condensed", "Arial Narrow", "sans-serif"],
+        display: ["var(--font-display)", "Space Grotesk", "Arial Narrow", "sans-serif"],
         body: ["var(--font-body)", "Inter", "system-ui", "sans-serif"]
       }
     }

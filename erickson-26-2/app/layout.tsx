@@ -1,9 +1,9 @@
 import type { Metadata, Viewport } from "next";
-import { Barlow_Condensed, Inter } from "next/font/google";
+import { Inter, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 
 // Self-hosted so the service worker caches them — typography survives offline.
-const barlow = Barlow_Condensed({
+const grotesk = Space_Grotesk({
   weight: ["500", "600", "700"],
   subsets: ["latin"],
   variable: "--font-display",
@@ -29,7 +29,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0F0E0B",
+  themeColor: "#0A0B09",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -38,7 +38,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${barlow.variable} ${inter.variable}`}>
+    <html lang="en" className={`${grotesk.variable} ${inter.variable}`}>
       <head>
         <script
           dangerouslySetInnerHTML={{
