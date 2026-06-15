@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { PLAN, Phase, daysUntil, findWeek, todayISO } from "@/lib/plan";
 import { computeZones, methodLabel } from "@/lib/zones";
 import {
-  exportAll, getBody, getDone, getProfile, getRuns, importAll, paceOf, saveProfile, Profile
+  CALIS_GOAL, CalisLog, exportAll, getBody, getCalis, getDone, getProfile, getRuns,
+  importAll, paceOf, saveProfile, Profile
 } from "@/lib/storage";
 
 const PHASE_COLOR: Record<Phase, string> = {
@@ -181,6 +182,9 @@ export default function ProgressView() {
         </div>
       </div>
 
+      {/* The daily 100s — pushups & situps habit */}
+      <HundredsCard today={today} />
+
       {/* Body composition — seeded from scale screenshots */}
       <BodyCard />
 
@@ -249,6 +253,97 @@ export default function ProgressView() {
             }}
           />
         </div>
+      </div>
+    </div>
+  );
+}
+
+function prevISO(iso: string): string {
+  const d = new Date(iso + "T12:00:00");
+  d.setDate(d.getDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function HundredsCard({ today }: { today: string }) {
+  const all = getCalis();
+  const entries = Object.entries(all);
+  if (entries.length === 0) return null;
+
+  const hitBoth = (d?: CalisLog) => !!d && d.pushups >= CALIS_GOAL && d.situps >= CALIS_GOAL;
+
+  const totalPush = entries.reduce((a, [, d]) => a + d.pushups, 0);
+  const totalSit = entries.reduce((a, [, d]) => a + d.situps, 0);
+  const perfectDays = entries.filter(([, d]) => hitBoth(d)).length;
+
+  // Streak of both-done days ending today — or yesterday, so an
+  // unfinished today doesn't zero it out mid-day.
+  let streak = 0;
+  let cursor = hitBoth(all[today]) ? today : prevISO(today);
+  while (hitBoth(all[cursor])) {
+    streak++;
+    cursor = prevISO(cursor);
+  }
+
+  // Last 14 days, oldest first
+  const strip: { date: string; day: CalisLog | undefined }[] = [];
+  let d = today;
+  for (let i = 0; i < 14; i++) {
+    strip.unshift({ date: d, day: all[d] });
+    d = prevISO(d);
+  }
+
+  return (
+    <div className="bg-coal rounded-2xl border border-seam p-5">
+      <h2 className="font-display font-bold text-xl text-bone">The daily 100s</h2>
+      <p className="text-[11px] text-dust mt-0.5">100 pushups + 100 situps, every day.</p>
+
+      <div className="grid grid-cols-2 gap-3 mt-3">
+        <div className="bg-ink rounded-lg px-3 py-2.5">
+          <div className="font-display font-bold text-2xl text-gold tabular-nums leading-none">
+            {streak}
+            <span className="text-dust text-sm ml-1">{streak === 1 ? "day" : "days"}</span>
+          </div>
+          <div className="text-[10px] text-dust mt-1">Current streak</div>
+        </div>
+        <div className="bg-ink rounded-lg px-3 py-2.5">
+          <div className="font-display font-bold text-2xl text-bone tabular-nums leading-none">
+            {perfectDays}
+          </div>
+          <div className="text-[10px] text-dust mt-1">Perfect days — both 100s hit</div>
+        </div>
+        <div className="bg-ink rounded-lg px-3 py-2.5">
+          <div className="font-display font-bold text-2xl text-bone tabular-nums leading-none">
+            {totalPush.toLocaleString()}
+          </div>
+          <div className="text-[10px] text-dust mt-1">Total pushups</div>
+        </div>
+        <div className="bg-ink rounded-lg px-3 py-2.5">
+          <div className="font-display font-bold text-2xl text-bone tabular-nums leading-none">
+            {totalSit.toLocaleString()}
+          </div>
+          <div className="text-[10px] text-dust mt-1">Total situps</div>
+        </div>
+      </div>
+
+      {/* Last 14 days — sage = both, gold = partial, empty = nothing */}
+      <div className="mt-4 flex gap-1">
+        {strip.map(({ date, day }) => {
+          const both = hitBoth(day);
+          const some = !!day && (day.pushups > 0 || day.situps > 0);
+          return (
+            <div
+              key={date}
+              title={`${fmtShortDate(date)}: ${day?.pushups ?? 0} pushups · ${day?.situps ?? 0} situps`}
+              className={`flex-1 h-8 rounded-sm ${
+                both ? "bg-sage" : some ? "bg-gold/50" : "bg-ink border border-seam"
+              }`}
+            />
+          );
+        })}
+      </div>
+      <div className="flex justify-between text-[10px] text-dust mt-1">
+        <span>2 weeks ago</span>
+        <span>today</span>
       </div>
     </div>
   );
