@@ -47,6 +47,10 @@ Single page, five bottom tabs (`app/page.tsx`): **Today · Plan · Log · Fuel �
   live heart rate over Web Bluetooth standard HR service (`lib/useHeartRate.ts`, works with
   Polar H10; Chrome/Android only), screen wake lock (`lib/useWakeLock.ts`). Saves run with
   GPS route trace + per-mile splits.
+- **Sensor check** (`components/DiagnosticsView.tsx`) — fullscreen diagnostics launched from the
+  Progress tab. Tests GPS (raw accuracy/coords/fix quality), heart-rate strap (reuses
+  `useHeartRate`), and screen wake lock (`useWakeLock`), plus a device-capability checklist.
+  Nothing is logged — it's a pre-run gear shakeout.
 - **Daily 100s** (`components/TodayView.tsx`) — pushup/situp counters, goal 100 each per day
   (`CALIS_GOAL`, `CalisLog` in storage). Progress tab shows a streak/totals card (`HundredsCard`).
 - **Coach's guide** (`lib/guide.ts`) — effort anchors on the 1–10 RPE scale, WhistleStop race
@@ -89,7 +93,7 @@ erickson-26-2/
     page.tsx          → shell: tabs, theme toggle, day re-key, applySeed
     layout.tsx        → fonts, PWA metadata, SW registration
     globals.css       → VOLT palette (dark + html.light), marquee
-  components/         → TodayView, PlanView, LogView, FuelView, ProgressView, RunView
+  components/         → TodayView, PlanView, LogView, FuelView, ProgressView, RunView, DiagnosticsView
   lib/
     plan.ts           → 18-week schedule, dates, paces (edit the plan here)
     zones.ts          → HR zone engine

@@ -7,6 +7,7 @@ import {
   CALIS_GOAL, CalisLog, exportAll, getBody, getCalis, getDone, getProfile, getRuns,
   importAll, paceOf, saveProfile, Profile
 } from "@/lib/storage";
+import DiagnosticsView from "@/components/DiagnosticsView";
 
 const PHASE_COLOR: Record<Phase, string> = {
   "Base": "bg-dust",
@@ -20,6 +21,7 @@ const PHASE_COLOR: Record<Phase, string> = {
 export default function ProgressView() {
   const [today, setToday] = useState("");
   const [, force] = useState(0);
+  const [diagnostics, setDiagnostics] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   useEffect(() => setToday(todayISO()), []);
   if (!today) return null;
@@ -83,6 +85,9 @@ export default function ProgressView() {
 
   return (
     <div className="space-y-4">
+      {/* Sensor check — fullscreen takeover, covers the tab bar */}
+      {diagnostics && <DiagnosticsView onClose={() => setDiagnostics(false)} />}
+
       {/* Stats grid */}
       <div className="grid grid-cols-2 gap-3">
         <Stat label="Total miles" value={totalActual.toFixed(1)} />
@@ -205,6 +210,20 @@ export default function ProgressView() {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Sensor check — test GPS, heart rate, wake lock */}
+      <div className="bg-coal rounded-2xl border border-seam p-5">
+        <h2 className="font-display font-bold text-xl text-bone">Sensor check</h2>
+        <p className="text-[11px] text-dust mt-0.5">
+          Test GPS and your heart-rate strap without starting a run. Nothing is logged.
+        </p>
+        <button
+          onClick={() => setDiagnostics(true)}
+          className="mt-3 w-full bg-ink border border-seam text-bone font-display font-bold uppercase tracking-wider rounded-lg py-3 text-sm min-h-[48px]"
+        >
+          ⚙ Open sensor check
+        </button>
       </div>
 
       {/* Profile — feeds the zone engine */}
