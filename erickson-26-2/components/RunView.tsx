@@ -97,6 +97,7 @@ export default function RunView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Web Speech (raw TTS). Best-effort; muting stops it via voiceOnRef.
   const speak = useCallback((text: string) => {
     if (!voiceOnRef.current) return;
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
@@ -107,48 +108,161 @@ export default function RunView({
     }
   }, []);
 
-  // Half-mile voice cue
-  const lastHalfRef = useRef(0);
-  useEffect(() => {
-    const half = Math.floor(gps.miles * 2);
-    if (half > lastHalfRef.current && half > 0) {
-      lastHalfRef.current = half;
-      const parts = [`${(half / 2).toFixed(1)} miles.`];
-      if (gps.currentPaceSec !== null) parts.push(`Current pace ${fmtPace(gps.currentPaceSec)}.`);
-      if (hr.bpm !== null && hr.zone !== null)
-        parts.push(`Heart rate ${hr.bpm}, zone ${hr.zone + 1}.`);
-      speak(parts.join(" "));
+  // Attention tones (WebAudio) so cues cut through music. The Start-run tap
+  // is the user gesture that lets the context start; we resume defensively.
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const ensureAudio = useCallback(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const Ctx =
+        window.AudioContext ??
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!audioCtxRef.current && Ctx) audioCtxRef.current = new Ctx();
+      if (audioCtxRef.current?.state === "suspended") audioCtxRef.current.resume().catch(() => {});
+      return audioCtxRef.current;
+    } catch {
+      return null;
     }
-  }, [gps.miles, gps.currentPaceSec, hr.bpm, hr.zone, speak]);
+  }, []);
 
-  // Mile split cue
-  const lastSplitCountRef = useRef(0);
-  useEffect(() => {
-    if (gps.splits.length > lastSplitCountRef.current) {
-      lastSplitCountRef.current = gps.splits.length;
-      const split = gps.splits[gps.splits.length - 1];
-      speak(`Mile ${gps.splits.length} in ${fmtPace(split)}.`);
-    }
-  }, [gps.splits, speak]);
-
-  // HR over-band cue: easy/long days only, after 30 continuous seconds
-  // above the band; re-arms only once HR drops back inside.
-  const overSinceRef = useRef<number | null>(null);
-  const hrCueArmedRef = useRef(true);
-  useEffect(() => {
-    if (!heartBand || (workout.type !== "easy" && workout.type !== "long")) return;
-    if (hr.bpm === null) return;
-    if (hr.bpm > heartBand.hi) {
-      if (overSinceRef.current === null) overSinceRef.current = Date.now();
-      else if (Date.now() - overSinceRef.current >= 30_000 && hrCueArmedRef.current) {
-        hrCueArmedRef.current = false;
-        speak(`Heart rate ${hr.bpm} — ease off.`);
+  const tone = useCallback(
+    (variant: "info" | "alert") => {
+      const ctx = ensureAudio();
+      if (!ctx) return;
+      try {
+        const freqs = variant === "alert" ? [880, 1175, 880] : [620, 830];
+        const dur = 0.11;
+        const gap = 0.06;
+        const peak = variant === "alert" ? 0.28 : 0.16;
+        freqs.forEach((f, i) => {
+          const osc = ctx.createOscillator();
+          const g = ctx.createGain();
+          osc.type = "sine";
+          osc.frequency.value = f;
+          const t0 = ctx.currentTime + i * (dur + gap);
+          g.gain.setValueAtTime(0.0001, t0);
+          g.gain.exponentialRampToValueAtTime(peak, t0 + 0.02);
+          g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+          osc.connect(g).connect(ctx.destination);
+          osc.start(t0);
+          osc.stop(t0 + dur + 0.02);
+        });
+      } catch {
+        // audio is best-effort
       }
-    } else {
-      overSinceRef.current = null;
-      hrCueArmedRef.current = true;
+    },
+    [ensureAudio]
+  );
+
+  // A cue = attention tone + buzz, then the spoken line a beat later so the
+  // tone lands first. "alert" reads more urgent than routine "info" updates.
+  const cue = useCallback(
+    (text: string, variant: "info" | "alert" = "info") => {
+      if (!voiceOnRef.current) return;
+      tone(variant);
+      try {
+        navigator.vibrate?.(variant === "alert" ? [110, 60, 110] : 45);
+      } catch {
+        // vibration unsupported (iOS) — ignore
+      }
+      window.setTimeout(() => speak(text), 240);
+    },
+    [tone, speak]
+  );
+
+  useEffect(() => {
+    return () => {
+      audioCtxRef.current?.close().catch(() => {});
+      try {
+        window.speechSynthesis?.cancel();
+      } catch {
+        // ignore
+      }
+    };
+  }, []);
+
+  // Cadence: runs under 5 mi get a cue every half mile; 5+ milers every mile
+  // (keeps race day uncluttered). Cue points on a whole mile announce that
+  // mile's split; the rest use trailing pace.
+  const cueIntervalMi = workout.miles >= 5 ? 1 : 0.5;
+  const lastCueStepRef = useRef(0);
+  useEffect(() => {
+    const step = Math.floor(gps.miles / cueIntervalMi + 1e-6);
+    if (step <= lastCueStepRef.current || step === 0) return;
+    lastCueStepRef.current = step;
+
+    const milestone = step * cueIntervalMi;
+    const mileIdx = Math.round(milestone);
+    const wholeMile = Math.abs(milestone - mileIdx) < 1e-6;
+    const split = wholeMile && gps.splits.length >= mileIdx ? gps.splits[mileIdx - 1] : null;
+    const paceSec = split ?? gps.currentPaceSec;
+
+    const parts: string[] = [];
+    if (split != null) parts.push(`Mile ${mileIdx}, ${fmtPace(split)}.`);
+    else
+      parts.push(
+        `${milestone.toFixed(1)} miles${paceSec != null ? `, ${fmtPace(paceSec)} pace` : ""}.`
+      );
+
+    // Coach to the workout's goal pace — except intervals, whose band is the
+    // rep pace and would misjudge the jog recoveries.
+    if (workout.type !== "intervals" && paceBand && paceSec != null) {
+      if (paceSec >= paceBand.lo && paceSec <= paceBand.hi) {
+        parts.push("On pace.");
+      } else {
+        const fast = paceSec < paceBand.lo;
+        const raw = fast ? paceBand.lo - paceSec : paceSec - paceBand.hi;
+        if (raw >= 4) {
+          const d = Math.max(5, Math.round(raw / 5) * 5);
+          parts.push(fast ? `${d} seconds fast, ease back.` : `${d} seconds slow.`);
+        } else {
+          parts.push("On pace.");
+        }
+      }
     }
-  }, [hr.bpm, heartBand, workout.type, speak]);
+    if (hr.bpm != null && hr.zone != null) parts.push(`Heart rate ${hr.bpm}, zone ${hr.zone + 1}.`);
+
+    cue(parts.join(" "), "info");
+  }, [gps.miles, gps.splits, gps.currentPaceSec, hr.bpm, hr.zone, paceBand, cueIntervalMi, workout.type, cue]);
+
+  // HR drift alert — both directions, every run type, using the workout's
+  // target HR band. Fires after 25 s continuously out of zone and re-arms
+  // only once HR returns. Held off during the first 3 min of moving (warmup).
+  const hrOutSinceRef = useRef<number | null>(null);
+  const hrAlertArmedRef = useRef(true);
+  const hrLastDirRef = useRef<"high" | "low" | null>(null);
+  useEffect(() => {
+    if (!heartBand || hr.bpm === null) return;
+    if (gps.movingSec < 180) {
+      hrOutSinceRef.current = null;
+      hrAlertArmedRef.current = true;
+      return;
+    }
+    const dir: "high" | "low" | null =
+      hr.bpm > heartBand.hi ? "high" : hr.bpm < heartBand.lo ? "low" : null;
+
+    if (dir === null) {
+      hrOutSinceRef.current = null;
+      hrAlertArmedRef.current = true; // back in zone → re-arm
+      hrLastDirRef.current = null;
+      return;
+    }
+    if (hrLastDirRef.current !== dir) {
+      hrLastDirRef.current = dir;
+      hrOutSinceRef.current = Date.now();
+      return;
+    }
+    if (hrOutSinceRef.current === null) hrOutSinceRef.current = Date.now();
+    else if (Date.now() - hrOutSinceRef.current >= 25_000 && hrAlertArmedRef.current) {
+      hrAlertArmedRef.current = false;
+      cue(
+        dir === "high"
+          ? `Heart rate ${hr.bpm}, above zone. Ease off.`
+          : `Heart rate ${hr.bpm}, below zone. Pick it up.`,
+        "alert"
+      );
+    }
+  }, [hr.bpm, heartBand, gps.movingSec, cue]);
 
   // STOP long-press (1.5 s hold; release cancels)
   const [holdPct, setHoldPct] = useState(0);
