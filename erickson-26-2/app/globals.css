@@ -41,23 +41,6 @@ input[type="number"], input[type="text"], textarea, select {
   font-variant-numeric: tabular-nums;
 }
 
-/* Daily-quote ticker: two copies of the text scroll for a seamless loop */
-.marquee {
-  overflow: hidden;
-}
-.marquee-inner {
-  display: inline-flex;
-  white-space: nowrap;
-  animation: marquee linear infinite;
-}
-@keyframes marquee {
-  from { transform: translateX(0); }
-  to { transform: translateX(-50%); }
-}
-
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
-  /* Static fallback: wrap the quote instead of scrolling it */
-  .marquee-inner { white-space: normal; }
-  .marquee-dup { display: none; }
 }

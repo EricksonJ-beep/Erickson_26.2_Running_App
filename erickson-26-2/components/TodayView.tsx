@@ -54,7 +54,7 @@ export default function TodayView({ onGoLog }: { onGoLog: () => void }) {
         />
       )}
 
-      {/* Daily fire — quote of the day, scrolling ticker */}
+      {/* Daily fire — quote of the day, shown in full */}
       <DailyFire dateISO={today} />
 
       {/* Race day banner */}
@@ -337,26 +337,19 @@ function Hundreds({ dateISO }: { dateISO: string }) {
 
 function DailyFire({ dateISO }: { dateISO: string }) {
   const q = quoteForDate(dateISO);
-  const line = `"${q.text}"  —  ${q.who}`;
-  // Longer quotes scroll slower so they stay readable
-  const duration = `${Math.max(14, Math.round(line.length / 4))}s`;
   return (
     <div className="bg-coal rounded-xl border border-gold/40 overflow-hidden">
-      <div className="flex items-center">
-        <div className="shrink-0 px-3 py-2.5 bg-gold/15 border-r border-gold/30">
+      <div className="flex items-stretch">
+        <div className="shrink-0 flex items-center px-3 bg-gold/15 border-r border-gold/30">
           <span className="font-display font-bold text-[10px] tracking-[0.18em] uppercase text-gold leading-none">
             Daily<br />Fire
           </span>
         </div>
-        <div className="marquee flex-1 py-2.5">
-          <div className="marquee-inner" style={{ animationDuration: duration }}>
-            <span className="px-4 font-display font-semibold text-base text-bone">
-              {line}
-            </span>
-            <span aria-hidden className="marquee-dup px-4 font-display font-semibold text-base text-bone">
-              {line}
-            </span>
-          </div>
+        <div className="flex-1 px-4 py-2.5">
+          <p className="font-display font-semibold text-base text-bone leading-snug">
+            &ldquo;{q.text}&rdquo;
+          </p>
+          <p className="mt-1 text-xs text-dust">— {q.who}</p>
         </div>
       </div>
     </div>
