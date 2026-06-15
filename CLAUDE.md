@@ -43,6 +43,8 @@ Single page, five bottom tabs (`app/page.tsx`): **Today · Plan · Log · Fuel �
   from Monday, 0–6.) Past weeks 0–1 keep their original layout as logged history.
 - **HR zone engine** (`lib/zones.ts`) — profile-driven, best method first: LTHR → Friel
   %LTHR; max+resting → Karvonen; max only → %max (Tanaka age estimate, default age 39).
+  `hrGuide()` maps each workout type to a target bpm window + zone; shown per-run on **Today**
+  (with pace/effort) and on every run row in the **Plan** tab.
 - **Run Mode** (`components/RunView.tsx`) — fullscreen live tracker. GPS (`lib/useGps.ts`),
   live heart rate over Web Bluetooth standard HR service (`lib/useHeartRate.ts`, works with
   Polar H10; Chrome/Android only), screen wake lock (`lib/useWakeLock.ts`). Saves run with

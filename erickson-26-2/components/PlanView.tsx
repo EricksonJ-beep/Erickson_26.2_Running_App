@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PLAN, findWeek, todayISO, Workout } from "@/lib/plan";
+import { FULL_DATE, PLAN, findWeek, todayISO, Workout } from "@/lib/plan";
 import { EFFORT_GUIDE, RACE_INTEL, ROADBLOCKS } from "@/lib/guide";
-import { getDone, getRuns } from "@/lib/storage";
+import { hrGuide, HRBandKey } from "@/lib/zones";
+import { getDone, getProfile, getRuns } from "@/lib/storage";
 
 const TYPE_DOT: Record<string, string> = {
   easy: "bg-bone/60",
@@ -15,6 +16,18 @@ const TYPE_DOT: Record<string, string> = {
   race: "bg-gold",
   walk: "bg-dust"
 };
+
+const TYPE_HR_KEY: Record<string, HRBandKey | undefined> = {
+  easy: "easy", long: "long", tempo: "tempo", intervals: "intervals", race: "halfRace"
+};
+
+// Target HR window for a run, from the live zone engine. Non-run days
+// (strength, XT, walk, rest) have no band, so no target is shown.
+function hrTargetFor(x: Workout, guide: ReturnType<typeof hrGuide>): string | null {
+  const key: HRBandKey | undefined =
+    x.type === "race" && x.date === FULL_DATE ? "marathon" : TYPE_HR_KEY[x.type];
+  return key ? guide[key].target : null;
+}
 
 function weekEndISO(start: string): string {
   const dt = new Date(start + "T12:00:00");
@@ -35,6 +48,7 @@ export default function PlanView() {
 
   const runs = getRuns();
   const done = getDone();
+  const guide = hrGuide(getProfile());
   const currentWeekObj = findWeek(today);
   const currentWeekNum = currentWeekObj?.num;
 
@@ -145,6 +159,7 @@ export default function PlanView() {
                       x={x}
                       logged={!!(runs[x.date] || done[x.date])}
                       isToday={x.date === today}
+                      hrTarget={hrTargetFor(x, guide)}
                     />
                   ))}
                 </div>
@@ -236,11 +251,13 @@ function GuideCard({ title, children }: { title: string; children: React.ReactNo
 function DayRow({
   x,
   logged,
-  isToday
+  isToday,
+  hrTarget
 }: {
   x: Workout;
   logged: boolean;
   isToday: boolean;
+  hrTarget: string | null;
 }) {
   return (
     <div
@@ -260,6 +277,16 @@ function DayRow({
         )}
         {logged && <span className="text-sage text-sm">✓</span>}
       </div>
+      {hrTarget && (
+        <div className="mt-1.5 ml-[18px] flex items-baseline gap-1.5">
+          <span className="text-[9px] uppercase tracking-widest text-dust font-display font-semibold">
+            Target HR
+          </span>
+          <span className="text-[11px] font-display font-semibold text-gold tabular-nums">
+            {hrTarget}
+          </span>
+        </div>
+      )}
       <p className="text-[11px] text-dust mt-1 ml-[18px] leading-snug">{x.detail}</p>
     </div>
   );
