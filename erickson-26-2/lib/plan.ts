@@ -133,53 +133,52 @@ export const PLAN: Week[] = [
     STR(4),
     { d: 6, type: "long", title: "Long run", detail: "6 mi relaxed with your sister. Run/walk welcome — 1 mi run / 1 min walk carried the 5-miler just fine.", miles: 6 }
   ]),
-  wk(2, "Half Build", "2026-06-15", "First taste of threshold work. Volume eases off after last week's jump.", [
+  wk(2, "Half Build", "2026-06-15", "First taste of threshold work — then pack up: the long run jumps to Friday and you leave for the Canada canoe trip Saturday the 20th.", [
+    STR(0),
     { d: 1, type: "tempo", title: "Tempo intro", detail: "1 mi easy → 1 mi @ tempo (9:05–9:15) → 1 mi easy.", miles: 3 },
     { d: 2, type: "easy", title: "Easy run", detail: "3 mi conversational.", miles: 3 },
     XT(3),
-    STR(4),
-    { d: 6, type: "long", title: "Long run", detail: "6 mi relaxed.", miles: 6 }
+    { d: 4, type: "long", title: "Long run", detail: "6 mi relaxed. Moved to Friday — you leave for the Canada canoe trip Saturday the 20th.", miles: 6 }
   ]),
-  wk(3, "Half Build", "2026-06-22", "Introduce intervals — speed with control.", [
-    { d: 1, type: "intervals", title: "Intervals", detail: "1 mi easy → 6×(1 min hard / 2 min easy jog) → 1 mi easy. ~3 mi total.", miles: 3 },
-    { d: 2, type: "easy", title: "Easy run", detail: "3 mi conversational.", miles: 3 },
-    XT(3),
-    STR(4),
-    { d: 6, type: "long", title: "Long run", detail: "7 mi relaxed.", miles: 7 }
+  wk(3, "Half Build", "2026-06-22", "Off-grid canoe trip in Canada most of the week — portaging carries the load. No intervals; easy miles only if they happen. Mileage will dip, and that's fine. The long run waits for your return.", [
+    { d: 0, type: "xt", title: "Canoe trip — Canada", detail: "Off-grid Mon–Fri. Paddling and portaging are the cross-training — legs, back, and heavy carries. No intervals this week, and no app updates until you're back; log what you can after.", optional: true },
+    { d: 2, type: "easy", title: "Easy run (if it happens)", detail: "An easy 2–3 mi around camp if the route and time allow. Optional — the trip is the work.", miles: 3, optional: true },
+    { d: 5, type: "long", title: "Long run", detail: "7 mi relaxed back home — you're back Saturday the 27th. Ease in; legs may be trip-tired.", miles: 7 }
   ]),
   wk(4, "Half Build", "2026-06-29", "Consolidate. Volume climbs gently on purpose.", [
+    STR(0),
     { d: 1, type: "tempo", title: "Tempo", detail: "1 mi easy → 2×(1 mi @ tempo, 3 min jog) → ½ mi easy. ~3.5 mi.", miles: 3.5 },
     { d: 2, type: "easy", title: "Easy run", detail: "3 mi conversational.", miles: 3 },
     XT(3),
-    STR(4),
-    { d: 6, type: "long", title: "Long run", detail: "8 mi relaxed. Practice mid-run hydration.", miles: 8 }
+    { d: 5, type: "long", title: "Long run", detail: "8 mi relaxed. Practice mid-run hydration.", miles: 8 }
   ]),
   wk(5, "Half Build", "2026-07-06", "Volume climbs. Protect the easy days.", [
+    STR(0),
     { d: 1, type: "intervals", title: "Intervals", detail: "1 mi easy → 5×(2 min hard / 2 min jog) → 1 mi easy. ~4 mi.", miles: 4 },
     { d: 2, type: "easy", title: "Easy run", detail: "3 mi conversational.", miles: 3 },
     XT(3),
-    STR(4),
-    { d: 6, type: "long", title: "Long run", detail: "9 mi relaxed. Test race-day breakfast this morning.", miles: 9 }
+    { d: 5, type: "long", title: "Long run", detail: "9 mi relaxed. Test race-day breakfast this morning.", miles: 9 }
   ]),
   wk(6, "Half Build", "2026-07-13", "Longest tempo yet. Race pace gets real.", [
+    STR(0),
     { d: 1, type: "tempo", title: "Tempo", detail: "1 mi easy → 2 mi continuous @ tempo → 1 mi easy.", miles: 4 },
     { d: 2, type: "easy", title: "Easy run", detail: "4 mi conversational.", miles: 4 },
     XT(3),
-    STR(4),
-    { d: 6, type: "long", title: "Long run", detail: "10 mi relaxed on a rolling route — Chippewa's mile-5 hill is coming. Fuel mid-run (gel or chews around mile 5).", miles: 10 }
+    { d: 5, type: "long", title: "Long run", detail: "10 mi relaxed on a rolling route — Chippewa's mile-5 hill is coming. Fuel mid-run (gel or chews around mile 5).", miles: 10 }
   ]),
   wk(7, "Half Build", "2026-07-20", "Peak week of the half build.", [
+    STR(0),
     { d: 1, type: "intervals", title: "Intervals", detail: "1 mi easy → 3×(1 mi @ 8:50–9:00, 3 min jog) → ½ mi easy. ~4.5 mi.", miles: 4.5 },
     { d: 2, type: "easy", title: "Easy run", detail: "3 mi conversational.", miles: 3 },
     XT(3),
     { d: 4, type: "easy", title: "Easy run", detail: "2 mi very relaxed.", miles: 2 },
-    { d: 6, type: "long", title: "Long run — peak", detail: "12 mi relaxed on a rolling route. Longest run before race day. Full dress rehearsal: shoes, fuel, fluids — and practice quick light steps on the downhills.", miles: 12 }
+    { d: 5, type: "long", title: "Long run — peak", detail: "12 mi relaxed on a rolling route. Longest run before race day. Full dress rehearsal: shoes, fuel, fluids — and practice quick light steps on the downhills.", miles: 12 }
   ]),
   wk(8, "Half Build", "2026-07-27", "Taper begins. Volume drops, sharpness stays.", [
+    STR(0),
     { d: 1, type: "tempo", title: "Race-pace tempo", detail: "1 mi easy → 2 mi @ half race pace (9:09) → 1 mi easy.", miles: 4 },
     { d: 2, type: "easy", title: "Easy run", detail: "3 mi conversational.", miles: 3 },
-    STR(3),
-    { d: 6, type: "long", title: "Long run — taper", detail: "8 mi relaxed, last 2 @ race pace. Lock in pacing feel.", miles: 8 }
+    { d: 5, type: "long", title: "Long run — taper", detail: "8 mi relaxed, last 2 @ race pace. Lock in pacing feel.", miles: 8 }
   ]),
   wk(9, "Race Week", "2026-08-03", "Chippewa Falls. Trust the work.", [
     { d: 1, type: "easy", title: "Easy + strides", detail: "3 mi easy + 4×20-sec strides. Legs stay awake, nothing more.", miles: 3 },
@@ -194,55 +193,58 @@ export const PLAN: Week[] = [
     { d: 5, type: "easy", title: "Recovery jog", detail: "2–3 mi very easy. If anything aches, walk instead.", miles: 3 }
   ]),
   wk(11, "Recovery Bridge", "2026-08-17", "Build back gently. Nothing long, nothing hard.", [
+    STR(0),
     { d: 1, type: "easy", title: "Easy run", detail: "3 mi conversational.", miles: 3 },
     { d: 2, type: "easy", title: "Easy run", detail: "3 mi + 4×20-sec strides.", miles: 3 },
-    STR(4),
-    { d: 6, type: "long", title: "Long run", detail: "6 mi relaxed.", miles: 6 }
+    { d: 5, type: "long", title: "Long run", detail: "6 mi relaxed.", miles: 6 }
   ]),
 
   // ── PHASE 3 · MARATHON BUILD ──
   wk(12, "Marathon Build", "2026-08-24", "Marathon block opens. Long runs become the centerpiece.", [
+    STR(0),
     { d: 1, type: "tempo", title: "Tempo", detail: "1 mi easy → 2 mi @ tempo → 1 mi easy.", miles: 4 },
     { d: 2, type: "easy", title: "Easy run", detail: "3 mi conversational.", miles: 3 },
     XT(3),
     { d: 4, type: "easy", title: "Easy run", detail: "2 mi very relaxed.", miles: 2 },
-    { d: 6, type: "long", title: "Long run", detail: "12 mi relaxed. Fuel every 40–45 min from here on out.", miles: 12 }
+    { d: 5, type: "long", title: "Long run", detail: "12 mi relaxed. Fuel every 40–45 min from here on out.", miles: 12 }
   ]),
-  wk(13, "Marathon Build", "2026-08-31", "School's back — protect the Sunday long run above all.", [
+  wk(13, "Marathon Build", "2026-08-31", "School's back — protect the Saturday long run above all.", [
+    STR(0),
     { d: 1, type: "intervals", title: "Intervals", detail: "1 mi easy → 4×(3 min hard / 2 min jog) → 1 mi easy. ~4 mi.", miles: 4 },
     { d: 2, type: "easy", title: "Easy run", detail: "4 mi conversational.", miles: 4 },
-    STR(3),
     { d: 4, type: "easy", title: "Easy run", detail: "2 mi very relaxed.", miles: 2 },
-    { d: 6, type: "long", title: "Long run", detail: "14 mi relaxed — new lifetime distance. Slow is the whole point.", miles: 14 }
+    { d: 5, type: "long", title: "Long run", detail: "14 mi relaxed — new lifetime distance. Slow is the whole point.", miles: 14 }
   ]),
   wk(14, "Marathon Build", "2026-09-07", "Marathon pace enters the long game.", [
+    STR(0),
     { d: 1, type: "tempo", title: "MP tempo", detail: "1 mi easy → 3 mi @ marathon pace (9:35–9:45) → 1 mi easy.", miles: 5 },
     { d: 2, type: "easy", title: "Easy run", detail: "4 mi conversational.", miles: 4 },
     XT(3),
     { d: 4, type: "easy", title: "Easy run", detail: "2 mi very relaxed.", miles: 2 },
-    { d: 6, type: "long", title: "Long run", detail: "16 mi relaxed. Practice full race nutrition: fuel + fluids on schedule.", miles: 16 }
+    { d: 5, type: "long", title: "Long run", detail: "16 mi relaxed. Practice full race nutrition: fuel + fluids on schedule.", miles: 16 }
   ]),
   wk(15, "Marathon Build", "2026-09-14", "Cutback week. Absorb the gains.", [
+    STR(0),
     { d: 1, type: "easy", title: "Easy run", detail: "4 mi conversational.", miles: 4 },
     { d: 2, type: "easy", title: "Easy run", detail: "3 mi + 4×20-sec strides.", miles: 3 },
-    STR(3),
     { d: 4, type: "easy", title: "Easy run", detail: "2 mi very relaxed.", miles: 2 },
-    { d: 6, type: "long", title: "Long run", detail: "12 mi with final 4 @ marathon pace. Finish-strong rehearsal.", miles: 12 }
+    { d: 5, type: "long", title: "Long run", detail: "12 mi with final 4 @ marathon pace. Finish-strong rehearsal.", miles: 12 }
   ]),
   wk(16, "Marathon Build", "2026-09-21", "Peak week. The 20-miler is the final exam before taper.", [
+    STR(0),
     { d: 1, type: "tempo", title: "Tempo", detail: "1 mi easy → 3 mi @ tempo → 1 mi easy.", miles: 5 },
     { d: 2, type: "easy", title: "Easy run", detail: "4 mi conversational.", miles: 4 },
     XT(3),
     { d: 4, type: "easy", title: "Easy run", detail: "2 mi very relaxed.", miles: 2 },
-    { d: 6, type: "long", title: "Long run — 20-miler", detail: "20 mi relaxed. Dead-slow is fine. Full fueling rehearsal. This run makes Ashland possible.", miles: 20 }
+    { d: 5, type: "long", title: "Long run — 20-miler", detail: "20 mi relaxed. Dead-slow is fine. Full fueling rehearsal. This run makes Ashland possible.", miles: 20 }
   ]),
 
   // ── PHASE 4 · TAPER ──
   wk(17, "Taper", "2026-09-28", "Volume drops ~45%. Fitness rises while you rest.", [
+    STR(0),
     { d: 1, type: "tempo", title: "MP tempo", detail: "1 mi easy → 2 mi @ marathon pace → 1 mi easy.", miles: 4 },
     { d: 2, type: "easy", title: "Easy run", detail: "3 mi conversational.", miles: 3 },
-    STR(3),
-    { d: 6, type: "long", title: "Long run — taper", detail: "10 mi relaxed. Last long effort. Sleep is now a workout.", miles: 10 }
+    { d: 5, type: "long", title: "Long run — taper", detail: "10 mi relaxed. Last long effort. Sleep is now a workout.", miles: 10 }
   ]),
   wk(18, "Race Week", "2026-10-05", "Ashland. 26.2. Run the first 20 with your head, the last 10K with your heart.", [
     { d: 1, type: "easy", title: "Easy + strides", detail: "3 mi easy + 4×20-sec strides.", miles: 3 },
