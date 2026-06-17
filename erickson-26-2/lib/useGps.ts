@@ -3,15 +3,27 @@
 // Live GPS tracking for Run Mode. Geolocation needs a secure context —
 // production HTTPS qualifies, and so does `npm run dev` on localhost.
 //
-// Filtering, in order: fixes with accuracy worse than 25 m are dropped;
-// the first 3 otherwise-good fixes are dropped (cold-start scatter);
-// any segment implying > 6.7 m/s (faster than 4:00/mi) is GPS jitter
-// and dropped. Distance is Haversine over what survives.
+// Filtering, in order: fixes with accuracy worse than MAX_ACCURACY_M are
+// dropped; the first 3 otherwise-good fixes are dropped (cold-start scatter);
+// any segment under MIN_STEP_M is treated as standing jitter; any segment
+// implying > 6.7 m/s (faster than 4:00/mi) is GPS jitter. Distance is
+// Haversine over what survives.
+//
+// Pre-warm: the hook can be `active` (watchPosition running, fix locking)
+// without having `start()`ed — distance/time only accumulate after start(),
+// so the countdown can warm GPS up and we throw away everything before GO.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { RoutePoint } from "./storage";
 
-const MAX_ACCURACY_M = 25;
+// Drop fixes worse than this (m). Tighter than the old 25 m: on a track with
+// open sky the H10/phone usually reports 5–15 m, so 20 keeps the good ones
+// and rejects the scatter that cuts corners.
+const MAX_ACCURACY_M = 20;
+// Segments shorter than this (m) are GPS jitter while standing still, not
+// real movement — small enough that a slow walk (~1.3 m/s ≈ 1.3 m/fix) still
+// counts, large enough to swallow sub-metre wander.
+const MIN_STEP_M = 1.0;
 const WARMUP_FIXES = 3;
 const MAX_SPEED_MS = 6.7;
 const PACE_WINDOW_MS = 45_000;
@@ -50,6 +62,7 @@ export interface GpsState {
   splits: number[]; // seconds per completed mile
   paused: boolean; // manual
   autoPaused: boolean;
+  lastAccuracy: number | null; // m, from the most recent fix (signal sanity check)
 }
 
 export interface GpsResult {
@@ -70,7 +83,8 @@ export function useGps(active: boolean) {
     movingSec: 0,
     splits: [],
     paused: false,
-    autoPaused: false
+    autoPaused: false,
+    lastAccuracy: null
   });
 
   const ptsRef = useRef<Pt[]>([]);
@@ -83,6 +97,9 @@ export function useGps(active: boolean) {
   const lowSpeedSinceRef = useRef<number | null>(null);
   const skipSegmentRef = useRef(false); // bridge over a manual pause
   const statusRef = useRef<GpsState["status"]>("acquiring");
+  const startedRef = useRef(false); // false during countdown pre-warm
+  const pendingRef = useRef<{ lat: number; lng: number; t: number } | null>(null);
+  const lastAccuracyRef = useRef<number | null>(null);
 
   const snapshot = useCallback(() => {
     const pts = ptsRef.current;
@@ -114,7 +131,8 @@ export function useGps(active: boolean) {
       movingSec,
       splits: splitsRef.current,
       paused: pausedRef.current,
-      autoPaused: autoPausedRef.current
+      autoPaused: autoPausedRef.current,
+      lastAccuracy: lastAccuracyRef.current
     });
   }, []);
 
@@ -125,17 +143,31 @@ export function useGps(active: boolean) {
       snapshot();
       return;
     }
-    startRef.current = Date.now();
 
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
         const { latitude, longitude, accuracy } = pos.coords;
         const t = Date.now();
-        if (accuracy > MAX_ACCURACY_M) return;
-        if (warmupRef.current < WARMUP_FIXES) {
-          warmupRef.current++;
+        lastAccuracyRef.current = accuracy;
+        if (accuracy > MAX_ACCURACY_M) {
+          snapshot(); // surface the bad-accuracy reading, count nothing
           return;
         }
+        if (warmupRef.current < WARMUP_FIXES) {
+          warmupRef.current++;
+          snapshot();
+          return;
+        }
+
+        // Pre-warm: GPS is locked but the run hasn't started. Hold the latest
+        // good fix as the start baseline; accumulate nothing until start().
+        if (!startedRef.current) {
+          pendingRef.current = { lat: latitude, lng: longitude, t };
+          statusRef.current = "tracking";
+          snapshot();
+          return;
+        }
+
         const pts = ptsRef.current;
         const prev = pts[pts.length - 1];
 
@@ -151,6 +183,12 @@ export function useGps(active: boolean) {
         const stepM = haversineMeters(prev.lat, prev.lng, latitude, longitude);
         const speed = stepM / (dt / 1000);
         if (speed > MAX_SPEED_MS) return; // jitter spike
+        // Min-movement gate: ignore sub-metre wander while standing still, but
+        // never drop a point during a manual pause (handled below).
+        if (stepM < MIN_STEP_M && !pausedRef.current) {
+          snapshot();
+          return;
+        }
 
         // Manual pause: track position but freeze distance + clock,
         // and bridge the gap so resume doesn't credit pause movement.
@@ -212,6 +250,23 @@ export function useGps(active: boolean) {
     };
   }, [active, snapshot]);
 
+  // Begin accumulating at GO. Anything captured during pre-warm is discarded;
+  // the latest locked fix (if any) becomes the zero-distance baseline so the
+  // first real segment isn't a cold-start jump.
+  const start = useCallback(() => {
+    startedRef.current = true;
+    startRef.current = Date.now();
+    movingMsRef.current = 0;
+    splitsRef.current = [];
+    pausedRef.current = false;
+    autoPausedRef.current = false;
+    lowSpeedSinceRef.current = null;
+    skipSegmentRef.current = false;
+    const p = pendingRef.current;
+    ptsRef.current = p ? [{ lat: p.lat, lng: p.lng, t: Date.now(), d: 0 }] : [];
+    snapshot();
+  }, [snapshot]);
+
   const pause = useCallback(() => {
     pausedRef.current = true;
     snapshot();
@@ -246,5 +301,5 @@ export function useGps(active: boolean) {
     };
   }, []);
 
-  return { ...state, pause, resume, finish };
+  return { ...state, start, pause, resume, finish };
 }

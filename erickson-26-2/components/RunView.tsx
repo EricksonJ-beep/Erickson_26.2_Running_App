@@ -24,6 +24,11 @@ const TYPE_RPE_FALLBACK: Partial<Record<WorkoutType, number>> = {
 const ZONE_RPE = [3, 5, 6, 8, 9]; // dominant Z1–Z5 → RPE
 const ZONE_BAR_COLORS = ["bg-dust", "bg-sage", "bg-gold", "bg-goldDim", "bg-ember"];
 
+// Pre-start countdown. GPS pre-warms during this window; tracking begins at GO.
+const COUNTDOWN_SEC = 5;
+// Press-and-hold duration to leave the lock-controls overlay.
+const UNLOCK_HOLD_MS = 2000;
+
 function fmtPace(sec: number | null): string {
   if (sec === null || !isFinite(sec) || sec <= 0) return "—";
   const m = Math.floor(sec / 60);
@@ -64,7 +69,9 @@ export default function RunView({
   workout: Workout;
   onClose: (saved: boolean) => void;
 }) {
-  const [phase, setPhase] = useState<"live" | "summary">("live");
+  const [phase, setPhase] = useState<"countdown" | "live" | "summary">("countdown");
+  const [count, setCount] = useState(COUNTDOWN_SEC); // 5→1, then 0 = GO
+  const [locked, setLocked] = useState(false);
   const [voiceOn, setVoiceOn] = useState(true);
   const voiceOnRef = useRef(true);
   voiceOnRef.current = voiceOn;
@@ -79,7 +86,7 @@ export default function RunView({
   const guide = paceKey ? hrGuide(profile)[paceKey] : null;
   const zones = computeZones(profile);
 
-  const gps = useGps(phase === "live");
+  const gps = useGps(phase === "countdown" || phase === "live");
   const hr = useHeartRate();
   const wake = useWakeLock();
 
@@ -181,10 +188,42 @@ export default function RunView({
     };
   }, []);
 
-  // Cadence: runs under 5 mi get a cue every half mile; 5+ milers every mile
-  // (keeps race day uncluttered). Cue points on a whole mile announce that
-  // mile's split; the rest use trailing pace.
-  const cueIntervalMi = workout.miles >= 5 ? 1 : 0.5;
+  // Countdown → GO. Ticks each second with a haptic buzz + tone; at zero we
+  // commit the GPS baseline (gps.start) and drop into the live screen. GPS has
+  // been warming the whole time, so "GO" means a fix is already locked.
+  useEffect(() => {
+    if (phase !== "countdown") return;
+    ensureAudio(); // warm the audio graph off the Start-run gesture
+    if (count > 0) {
+      try {
+        navigator.vibrate?.(60);
+      } catch {
+        // vibration unsupported — ignore
+      }
+      if (voiceOnRef.current) tone("info");
+      const id = window.setTimeout(() => setCount((c) => c - 1), 1000);
+      return () => window.clearTimeout(id);
+    }
+    // count === 0 → GO
+    try {
+      navigator.vibrate?.(180);
+    } catch {
+      // ignore
+    }
+    if (voiceOnRef.current) tone("alert");
+    const id = window.setTimeout(() => {
+      gps.start();
+      setPhase("live");
+    }, 650);
+    return () => window.clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, count]);
+
+  // Cadence: a pace + HR cue every half mile, every run length (Jon's getting
+  // used to the app and likes the frequency). Cue points on a whole mile
+  // announce that mile's split; the rest use trailing pace. Drift alerts
+  // (HR / pace out of band) are separate and fire independently.
+  const cueIntervalMi = 0.5;
   const lastCueStepRef = useRef(0);
   useEffect(() => {
     const step = Math.floor(gps.miles / cueIntervalMi + 1e-6);
@@ -308,6 +347,40 @@ export default function RunView({
       holdTimerRef.current = null;
     }
     setHoldPct(0);
+  }, []);
+
+  // Unlock the lock-controls overlay — deliberate 2 s press-and-hold so a
+  // pocket touch can't dismiss it.
+  const [unlockPct, setUnlockPct] = useState(0);
+  const unlockTimerRef = useRef<number | null>(null);
+  const unlockStartRef = useRef(0);
+
+  const startUnlock = useCallback(() => {
+    unlockStartRef.current = Date.now();
+    unlockTimerRef.current = window.setInterval(() => {
+      const pct = (Date.now() - unlockStartRef.current) / UNLOCK_HOLD_MS;
+      if (pct >= 1) {
+        window.clearInterval(unlockTimerRef.current!);
+        unlockTimerRef.current = null;
+        setUnlockPct(0);
+        setLocked(false);
+        try {
+          navigator.vibrate?.(60);
+        } catch {
+          // ignore
+        }
+      } else {
+        setUnlockPct(pct);
+      }
+    }, 50);
+  }, []);
+
+  const cancelUnlock = useCallback(() => {
+    if (unlockTimerRef.current !== null) {
+      window.clearInterval(unlockTimerRef.current);
+      unlockTimerRef.current = null;
+    }
+    setUnlockPct(0);
   }, []);
 
   function save() {
@@ -438,6 +511,105 @@ export default function RunView({
     );
   }
 
+  // ── Countdown screen ──
+  if (phase === "countdown") {
+    const gpsReady = gps.status === "tracking";
+    return (
+      <div className="fixed inset-0 z-50 bg-ink flex flex-col">
+        <div className="mx-auto max-w-md w-full flex-1 flex flex-col items-center justify-center px-5 text-center">
+          <div className="font-display font-semibold text-bone truncate max-w-full">
+            {workout.title}
+          </div>
+          <div
+            className={`font-display font-black leading-none tabular-nums mt-6 ${
+              count > 0 ? "text-gold text-[9rem]" : "text-sage text-[7rem]"
+            }`}
+          >
+            {count > 0 ? count : "GO"}
+          </div>
+          <div className="mt-8 text-[11px] uppercase tracking-widest font-display font-semibold">
+            {gps.status === "denied" ? (
+              <span className="text-ember">
+                Location denied — enable it in site settings.
+              </span>
+            ) : gpsReady ? (
+              <span className="text-sage">● GPS locked{gps.lastAccuracy != null ? ` · ±${Math.round(gps.lastAccuracy)} m` : ""}</span>
+            ) : (
+              <span className="text-dust animate-pulse">Acquiring GPS…</span>
+            )}
+          </div>
+        </div>
+        <div className="mx-auto max-w-md w-full px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+          <button
+            onClick={() => onClose(false)}
+            className="w-full text-dust text-sm py-3 min-h-[48px]"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Lock-controls overlay ──
+  // Live stats only; every control is gone so a pocket touch can't pause,
+  // stop, or hit anything underneath. Hold 2 s to unlock.
+  if (phase === "live" && locked) {
+    return (
+      <div className="fixed inset-0 z-[60] bg-ink flex flex-col">
+        <div className="mx-auto max-w-md w-full flex-1 flex flex-col justify-center gap-7 px-6 pt-[max(1rem,env(safe-area-inset-top))]">
+          <div className="text-center text-[11px] uppercase tracking-widest text-dust font-display font-semibold">
+            🔒 Locked
+          </div>
+          <div className="text-center">
+            <div className="text-[11px] uppercase tracking-widest text-dust font-display font-semibold">
+              Distance
+            </div>
+            <div className="font-display font-bold text-8xl text-gold leading-none tabular-nums">
+              {gps.miles.toFixed(2)}
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-3 text-center">
+            {[
+              { label: "Pace", value: fmtPace(gps.currentPaceSec) },
+              { label: "Time", value: fmtClock(gps.movingSec) },
+              { label: "HR", value: hr.bpm !== null ? `${hr.bpm}` : "--" }
+            ].map((c) => (
+              <div key={c.label}>
+                <div className="text-[10px] uppercase tracking-widest text-dust font-display font-semibold">
+                  {c.label}
+                </div>
+                <div className="font-display font-bold text-3xl text-bone tabular-nums mt-0.5">
+                  {c.value}
+                </div>
+              </div>
+            ))}
+          </div>
+          {gps.autoPaused && (
+            <div className="text-center text-[11px] font-display font-bold tracking-widest uppercase text-gold">
+              Auto-paused
+            </div>
+          )}
+        </div>
+        <div className="mx-auto max-w-md w-full px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+          <button
+            onPointerDown={startUnlock}
+            onPointerUp={cancelUnlock}
+            onPointerLeave={cancelUnlock}
+            onPointerCancel={cancelUnlock}
+            className="relative w-full overflow-hidden bg-coal text-bone border border-seam font-display font-bold tracking-widest uppercase rounded-xl py-5 text-sm min-h-[56px] select-none touch-none"
+          >
+            <span
+              className="absolute inset-y-0 left-0 bg-gold/25 transition-none"
+              style={{ width: `${unlockPct * 100}%` }}
+            />
+            <span className="relative">{unlockPct > 0 ? "Hold…" : "Hold to unlock"}</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // ── Live screen ──
   const showPairButton = hr.supported && (hr.status === "idle" || hr.status === "lost");
   return (
@@ -457,15 +629,24 @@ export default function RunView({
               {guide && <> · {guide.target}</>}
             </div>
           </div>
-          <button
-            onClick={() => setVoiceOn(!voiceOn)}
-            aria-label={voiceOn ? "Mute voice cues" : "Unmute voice cues"}
-            className={`shrink-0 ml-3 w-12 h-12 rounded-lg border text-lg leading-none ${
-              voiceOn ? "bg-coal border-gold/40 text-gold" : "bg-coal border-seam text-dust"
-            }`}
-          >
-            {voiceOn ? "🔊" : "🔇"}
-          </button>
+          <div className="shrink-0 ml-3 flex gap-2">
+            <button
+              onClick={() => setLocked(true)}
+              aria-label="Lock controls"
+              className="w-12 h-12 rounded-lg border bg-coal border-seam text-dust text-lg leading-none"
+            >
+              🔒
+            </button>
+            <button
+              onClick={() => setVoiceOn(!voiceOn)}
+              aria-label={voiceOn ? "Mute voice cues" : "Unmute voice cues"}
+              className={`w-12 h-12 rounded-lg border text-lg leading-none ${
+                voiceOn ? "bg-coal border-gold/40 text-gold" : "bg-coal border-seam text-dust"
+              }`}
+            >
+              {voiceOn ? "🔊" : "🔇"}
+            </button>
+          </div>
         </div>
 
         {/* Status line */}
@@ -485,6 +666,13 @@ export default function RunView({
           )}
           {hr.status === "lost" && (
             <span className="text-[11px] text-ember ml-2">HR lost — reconnecting…</span>
+          )}
+          {gps.status === "tracking" && gps.lastAccuracy != null && (
+            <span
+              className={`text-[11px] ml-2 ${gps.lastAccuracy <= 12 ? "text-dust" : "text-ember"}`}
+            >
+              GPS ±{Math.round(gps.lastAccuracy)} m
+            </span>
           )}
         </div>
 

@@ -49,9 +49,16 @@ Single page, five bottom tabs (`app/page.tsx`): **Today · Plan · Log · Fuel �
   live heart rate over Web Bluetooth standard HR service (`lib/useHeartRate.ts`, works with
   Polar H10; Chrome/Android only), screen wake lock (`lib/useWakeLock.ts`). Saves run with
   GPS route trace + per-mile splits. **Voice coaching** (Web Speech + WebAudio tone + vibrate,
-  master 🔊/🔇 mute): adaptive cadence (½-mi cues under 5 mi, 1-mi at 5+), pace coached to the
+  master 🔊/🔇 mute): pace+HR cue every ½ mile on every run (`cueIntervalMi`), pace coached to the
   workout's goal band, and both-direction HR drift alerts (above/below target zone, 25 s debounce,
-  3 min warmup hold).
+  3 min warmup hold). **Phases:** `countdown → live → summary`. A 5→GO countdown (`COUNTDOWN_SEC`)
+  pre-warms GPS — `useGps` runs during the count but only accumulates after `gps.start()` at GO,
+  so cold-start scatter is discarded and tracking begins on a locked fix. **Lock controls** (🔒):
+  full-screen stats-only overlay disabling every control (pocket the phone without mis-taps);
+  hold-to-unlock 2 s (`UNLOCK_HOLD_MS`). Live screen shows a GPS accuracy readout
+  (`gps.lastAccuracy`). GPS tuning: accuracy gate `MAX_ACCURACY_M` 20 m, min-movement gate
+  `MIN_STEP_M` 1 m, Haversine summed per-segment. The phone-locked / background-GPS goal needs a
+  native wrapper — see `erickson-26-2/docs/PHASE2_BACKGROUND_GPS.md` (Capacitor proposal, not built).
 - **Sensor check** (`components/DiagnosticsView.tsx`) — fullscreen diagnostics launched from the
   Progress tab. Tests GPS (raw accuracy/coords/fix quality), heart-rate strap (reuses
   `useHeartRate`), and screen wake lock (`useWakeLock`), plus a device-capability checklist.
@@ -76,10 +83,16 @@ All in `localStorage`, keys `hr_*_v1`: `RunLog` (incl. optional `route`, `splits
 completions) and `seeded` (dedupe ledger). `exportAll`/`importAll` cover everything.
 
 ## In Progress / Next Up
+- [ ] **Awaiting Jon's first real Run Mode session.** Voice coaching (pace-to-target + both-direction
+      HR drift alerts + beep/vibrate) shipped but is untested on real hardware (this dev env has no
+      GPS/Bluetooth/speaker). After his first run, tune wording/thresholds; likely tweak = exempt
+      **interval** days from HR alerts if they nag mid-rep (one-line change in `RunView.tsx`).
+- [ ] **Sharpen HR zones with real data.** Zones currently use an *estimated* max HR (Tanaka, age 39)
+      since the profile holds defaults. Now that Jon has a Polar H10, prompt him to enter true **max HR**
+      and/or **LTHR** in Progress → Profile — every target window (Today, Plan, Run Mode) recomputes.
 - [ ] **Jon is off-grid June 20–27, 2026** (Canada canoe trip). No app updates / no run logging that
       week; wk 3 mileage will be down by design (portaging = cross-train, no intervals, long run held
       to Sat Jun 27). Expect a seeding gap, not missed workouts.
-- [ ] (add current priorities here)
 
 ## Known Issues
 - Web Bluetooth HR is Chrome/Android only — iOS/Safari report unsupported and stay inert.
@@ -97,16 +110,16 @@ erickson-26-2/
   app/
     page.tsx          → shell: tabs, theme toggle, day re-key, applySeed
     layout.tsx        → fonts, PWA metadata, SW registration
-    globals.css       → VOLT palette (dark + html.light), marquee
+    globals.css       → VOLT palette (dark + html.light)
   components/         → TodayView, PlanView, LogView, FuelView, ProgressView, RunView, DiagnosticsView
   lib/
     plan.ts           → 18-week schedule, dates, paces (edit the plan here)
-    zones.ts          → HR zone engine
+    zones.ts          → HR zone engine + per-workout hrGuide() targets
     guide.ts          → coach's guide content
     quotes.ts         → Daily Fire quotes
     storage.ts        → localStorage model + export/import + seed merge
     seed.ts           → chat-seeded runs/body data
-    useGps.ts / useHeartRate.ts / useWakeLock.ts → Run Mode hooks
+    useGps.ts / useHeartRate.ts / useWakeLock.ts → Run Mode + Sensor check hooks
   public/             → manifest.json, sw.js, icons
 CLAUDE.md             → this file (repo root)
 ```
