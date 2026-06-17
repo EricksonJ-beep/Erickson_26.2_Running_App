@@ -1,4 +1,4 @@
-const CACHE = 'erickson-v3';
+const CACHE = 'erickson-v4';
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/'])));

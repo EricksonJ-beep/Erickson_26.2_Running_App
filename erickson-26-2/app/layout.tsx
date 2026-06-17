@@ -25,7 +25,7 @@ export const metadata: Metadata = {
     statusBarStyle: "black-translucent",
     title: "Erickson 26.2"
   },
-  icons: { apple: "/icon-192.png" }
+  icons: { apple: "/apple-touch-icon.png" }
 };
 
 export const viewport: Viewport = {
