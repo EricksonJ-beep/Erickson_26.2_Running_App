@@ -8,6 +8,7 @@ import {
   importAll, paceOf, saveProfile, Profile
 } from "@/lib/storage";
 import DiagnosticsView from "@/components/DiagnosticsView";
+import HRTestView from "@/components/HRTestView";
 
 const PHASE_COLOR: Record<Phase, string> = {
   "Base": "bg-dust",
@@ -22,6 +23,7 @@ export default function ProgressView() {
   const [today, setToday] = useState("");
   const [, force] = useState(0);
   const [diagnostics, setDiagnostics] = useState(false);
+  const [hrTest, setHrTest] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   useEffect(() => setToday(todayISO()), []);
   if (!today) return null;
@@ -87,6 +89,9 @@ export default function ProgressView() {
     <div className="space-y-4">
       {/* Sensor check — fullscreen takeover, covers the tab bar */}
       {diagnostics && <DiagnosticsView onClose={() => setDiagnostics(false)} />}
+
+      {/* Fitness tests — fullscreen, writes max HR / LTHR to the profile */}
+      {hrTest && <HRTestView onClose={() => setHrTest(false)} onSaved={() => force((n) => n + 1)} />}
 
       {/* Stats grid */}
       <div className="grid grid-cols-2 gap-3">
@@ -210,6 +215,21 @@ export default function ProgressView() {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Fitness tests — measure real max HR / LTHR with the strap */}
+      <div className="bg-coal rounded-2xl border border-seam p-5">
+        <h2 className="font-display font-bold text-xl text-bone">Fitness tests</h2>
+        <p className="text-[11px] text-dust mt-0.5 leading-snug">
+          Measure your real max HR or lactate threshold with the strap — guided, science-based
+          field tests. The result saves to your profile and sharpens every zone.
+        </p>
+        <button
+          onClick={() => setHrTest(true)}
+          className="mt-3 w-full bg-ink border border-seam text-bone font-display font-bold uppercase tracking-wider rounded-lg py-3 text-sm min-h-[48px]"
+        >
+          ⚡ Open fitness tests
+        </button>
       </div>
 
       {/* Sensor check — test GPS, heart rate, wake lock */}

@@ -65,6 +65,40 @@ export const SEED_RUNS: SeedRun[] = [
     hr: 140,
     notes:
       "Treadmill @ 9:30. HR ~135 through 2 mi, drifted to 155 in mile 3 at the same pace — that pace is Z3 effort right now. Easy days should sit slower."
+  },
+
+  // Week 2 — base building
+  {
+    date: "2026-06-14",
+    miles: 6.5,
+    minutes: 65,
+    rpe: 5,
+    notes: "Long run."
+  },
+  {
+    date: "2026-06-15",
+    miles: 1,
+    minutes: 12,
+    rpe: 2,
+    notes: "Light warmup before lifting."
+  },
+  {
+    date: "2026-06-16",
+    miles: 3.1,
+    minutes: 29,
+    rpe: 6,
+    hr: 135,
+    notes:
+      "Sore from lifting Monday but fine during the run. Max HR hit 153 at the end; 2nd mile mostly around 143 HR."
+  },
+  {
+    date: "2026-06-17",
+    miles: 3,
+    minutes: 32,
+    rpe: 4,
+    hr: 135,
+    notes:
+      "Easy. Had to hold back to stay in the HR zone."
   }
 ];
 
