@@ -470,39 +470,47 @@ function fmtShortDate(iso: string): string {
   });
 }
 
+const PROFILE_RANGES: Record<keyof Profile, [number, number]> = {
+  age: [10, 100],
+  restingHR: [30, 100],
+  maxHR: [120, 230],
+  lthr: [100, 210]
+};
+
 function ProfileCard({ onSaved }: { onSaved: () => void }) {
   const [p, setP] = useState<Profile | null>(null);
   const [saved, setSaved] = useState(false);
   useEffect(() => setP(getProfile()), []);
   if (!p) return null;
 
-  const field = (
-    key: keyof Profile,
-    label: string,
-    placeholder: string,
-    min: number,
-    max: number
-  ) => (
-    <label className="block">
-      <span className="text-[10px] uppercase tracking-widest text-dust font-display font-semibold">
-        {label}
-      </span>
-      <input
-        type="number"
-        inputMode="numeric"
-        value={p[key] ?? ""}
-        placeholder={placeholder}
-        min={min}
-        max={max}
-        onChange={(e) => {
-          const n = parseInt(e.target.value, 10);
-          setP({ ...p, [key]: Number.isFinite(n) && n >= min && n <= max ? n : undefined });
-          setSaved(false);
-        }}
-        className="mt-1 w-full bg-ink border border-seam rounded-lg px-3 py-2 text-bone tabular-nums text-sm focus:outline-none focus:border-gold"
-      />
-    </label>
-  );
+  const field = (key: keyof Profile, label: string, placeholder: string) => {
+    const [min, max] = PROFILE_RANGES[key];
+    return (
+      <label className="block">
+        <span className="text-[10px] uppercase tracking-widest text-dust font-display font-semibold">
+          {label}
+        </span>
+        <input
+          type="number"
+          inputMode="numeric"
+          value={p[key] ?? ""}
+          placeholder={placeholder}
+          min={min}
+          max={max}
+          // Keep whatever number is typed so multi-digit entry works; the
+          // range is enforced on Save, not per keystroke (that silently ate
+          // every partial value and made the fields feel uneditable).
+          onChange={(e) => {
+            const raw = e.target.value;
+            const n = parseInt(raw, 10);
+            setP({ ...p, [key]: raw === "" || Number.isNaN(n) ? undefined : n });
+            setSaved(false);
+          }}
+          className="mt-1 w-full bg-ink border border-seam rounded-lg px-3 py-2 text-bone tabular-nums text-sm focus:outline-none focus:border-gold"
+        />
+      </label>
+    );
+  };
 
   return (
     <div className="bg-coal rounded-2xl border border-seam p-5">
@@ -513,14 +521,23 @@ function ProfileCard({ onSaved }: { onSaved: () => void }) {
         zones use the best data you&apos;ve got.
       </p>
       <div className="grid grid-cols-2 gap-3 mt-3">
-        {field("age", "Age", "39", 10, 100)}
-        {field("restingHR", "Resting HR", "—", 30, 100)}
-        {field("maxHR", "Max HR", "—", 120, 230)}
-        {field("lthr", "Threshold HR", "—", 100, 210)}
+        {field("age", "Age", "39")}
+        {field("restingHR", "Resting HR", "—")}
+        {field("maxHR", "Max HR", "—")}
+        {field("lthr", "Threshold HR", "—")}
       </div>
       <button
         onClick={() => {
-          saveProfile(p);
+          // Clamp each field to its valid range on save; drop anything that
+          // doesn't make sense rather than persisting a half-typed number.
+          const clean: Profile = {};
+          (Object.keys(PROFILE_RANGES) as (keyof Profile)[]).forEach((key) => {
+            const v = p[key];
+            const [min, max] = PROFILE_RANGES[key];
+            if (typeof v === "number" && v >= min && v <= max) clean[key] = v;
+          });
+          setP(clean);
+          saveProfile(clean);
           setSaved(true);
           onSaved();
         }}
