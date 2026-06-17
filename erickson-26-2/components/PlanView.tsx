@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { FULL_DATE, PLAN, findWeek, todayISO, Workout } from "@/lib/plan";
-import { EFFORT_GUIDE, RACE_INTEL, ROADBLOCKS } from "@/lib/guide";
+import { EFFORT_GUIDE, RACE_INTEL, ROADBLOCKS, FUELING_GUIDE, FUEL_NOTE, FuelGuide } from "@/lib/guide";
 import { hrGuide, HRBandKey } from "@/lib/zones";
 import { getDone, getProfile, getRuns } from "@/lib/storage";
 
@@ -227,7 +227,63 @@ export default function PlanView() {
             </div>
           </GuideCard>
         </div>
+
+        {/* Fueling & hydration playbook */}
+        <div className="text-[10px] uppercase tracking-widest text-dust font-display font-semibold px-1 mt-5 mb-2">
+          Fueling &amp; hydration
+        </div>
+        <p className="text-[11px] text-dust px-1 mb-2 leading-snug">{FUEL_NOTE}</p>
+        <div className="space-y-2">
+          {FUELING_GUIDE.map((g) => (
+            <GuideCard key={g.title} title={g.title}>
+              <FuelGuideBody guide={g} />
+            </GuideCard>
+          ))}
+        </div>
       </div>
+    </div>
+  );
+}
+
+function FuelGuideBody({ guide }: { guide: FuelGuide }) {
+  return (
+    <div className="space-y-3">
+      {guide.intro && <p className="text-[11px] text-dust leading-snug -mt-0.5">{guide.intro}</p>}
+      {guide.blocks.map((b, i) => (
+        <div key={i} className="space-y-1.5">
+          {b.heading && (
+            <div className="text-[11px] uppercase tracking-wide text-gold font-display font-semibold">
+              {b.heading}
+            </div>
+          )}
+          {b.text && <p className="text-[11px] text-bone/85 leading-snug">{b.text}</p>}
+          {b.rows && (
+            <div className="space-y-1.5">
+              {b.rows.map((r) => (
+                <div key={r.k} className="bg-ink rounded-lg px-3 py-2">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="text-[11px] uppercase tracking-wide text-dust font-display font-semibold shrink-0">
+                      {r.k}
+                    </span>
+                    <span className="text-sm text-bone font-semibold leading-snug text-right">{r.v}</span>
+                  </div>
+                  {r.note && <div className="text-[10px] text-dust leading-snug mt-0.5">{r.note}</div>}
+                </div>
+              ))}
+            </div>
+          )}
+          {b.bullets && (
+            <ul className="space-y-1">
+              {b.bullets.map((t) => (
+                <li key={t} className="text-[11px] text-bone/85 leading-snug flex gap-2">
+                  <span className="text-gold shrink-0">→</span>
+                  <span>{t}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
