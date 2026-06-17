@@ -80,9 +80,9 @@ Single page, five bottom tabs (`app/page.tsx`): **Today · Plan · Log · Fuel �
   Tuned for ~95 kg (targets scale w/ weight, flagged via `FUEL_NOTE`). Covers: two-tank glycogen/fat
   model, carbs/fluid/sodium per-hour targets (half vs full), dual-source carbs, sweat-rate test,
   pre-run meals + top-off, carb loading, side-by-side half & full race-day timelines, gut-training
-  progression tied to long runs, and a cheat sheet. The interactive tools the doc suggests (fuel
-  calculator, sweat-rate logger, gut-training tracker, race-day timeline generator) are NOT built —
-  reference content only, deferred as a future feature.
+  progression tied to long runs, and a cheat sheet. Reference content only — the interactive tools
+  the source doc floated (fuel calculator, sweat-rate logger, gut-training tracker, race-day timeline
+  generator) were considered and **declined by Jon**; don't re-pitch them unless he asks.
 - **Daily Fire** (`lib/quotes.ts`) — 39 quotes, one chosen per day, shown in full (stationary) on Today.
 - **Fuel tracking** (`components/FuelView.tsx`) — water / calories / protein per day.
 - **Body composition** (`BodyLog`) — Renpho scale readings, seeded from chat screenshots,
