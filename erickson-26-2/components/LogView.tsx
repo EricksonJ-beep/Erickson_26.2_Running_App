@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { todayISO, workoutOn } from "@/lib/plan";
 import { TYPE_EFFORT } from "@/lib/guide";
 import { deleteRun, getRuns, paceOf, RunLog, saveRun } from "@/lib/storage";
+import RouteMap from "./RouteMap";
 
 export default function LogView() {
   const [date, setDate] = useState("");
@@ -15,6 +16,7 @@ export default function LogView() {
   const [saved, setSaved] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [showAll, setShowAll] = useState(false);
+  const [openMap, setOpenMap] = useState<string | null>(null); // run date whose route is expanded
   const [, force] = useState(0);
 
   useEffect(() => {
@@ -238,40 +240,69 @@ export default function LogView() {
             <span className="text-[11px] text-dust">{history.length} runs</span>
           </div>
           <div className="space-y-2">
-            {displayHistory.map((r) => (
-              <div key={r.date} className="bg-ink rounded-lg px-3 py-2.5">
-                <div className="flex items-start gap-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm text-bone">
-                      {fmt(r.date)} ·{" "}
-                      <span className="font-display font-semibold text-gold">{r.miles} mi</span>
-                      {r.minutes > 0 && (
-                        <span className="text-dust"> · {paceOf(r.miles, r.minutes)}</span>
+            {displayHistory.map((r) => {
+              const hasRoute = !!r.route && r.route.length > 1;
+              const mapOpen = openMap === r.date;
+              return (
+                <div key={r.date} className="bg-ink rounded-lg px-3 py-2.5">
+                  <div className="flex items-start gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm text-bone">
+                        {fmt(r.date)} ·{" "}
+                        <span className="font-display font-semibold text-gold">{r.miles} mi</span>
+                        {r.minutes > 0 && (
+                          <span className="text-dust"> · {paceOf(r.miles, r.minutes)}</span>
+                        )}
+                        <span className="text-dust"> · RPE {r.rpe}</span>
+                        {r.hr ? <span className="text-dust"> · {r.hr} bpm</span> : null}
+                      </div>
+                      {r.notes && (
+                        <div className="text-[11px] text-dust truncate mt-0.5">{r.notes}</div>
                       )}
-                      <span className="text-dust"> · RPE {r.rpe}</span>
-                      {r.hr ? <span className="text-dust"> · {r.hr} bpm</span> : null}
                     </div>
-                    {r.notes && (
-                      <div className="text-[11px] text-dust truncate mt-0.5">{r.notes}</div>
-                    )}
+                    <div className="flex gap-1 shrink-0">
+                      {hasRoute && (
+                        <button
+                          onClick={() => setOpenMap(mapOpen ? null : r.date)}
+                          aria-expanded={mapOpen}
+                          className={`text-xs px-2 py-1 border rounded ${
+                            mapOpen ? "text-gold border-gold/40" : "text-dust border-seam"
+                          }`}
+                        >
+                          {mapOpen ? "Hide" : "Map"}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => loadRun(r)}
+                        className="text-dust text-xs px-2 py-1 border border-seam rounded"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => { deleteRun(r.date); force((n) => n + 1); }}
+                        className="text-ember/70 text-xs px-2 py-1 border border-ember/30 rounded"
+                      >
+                        Del
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex gap-1 shrink-0">
-                    <button
-                      onClick={() => loadRun(r)}
-                      className="text-dust text-xs px-2 py-1 border border-seam rounded"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => { deleteRun(r.date); force((n) => n + 1); }}
-                      className="text-ember/70 text-xs px-2 py-1 border border-ember/30 rounded"
-                    >
-                      Del
-                    </button>
-                  </div>
+                  {hasRoute && mapOpen && (
+                    <div className="mt-2.5">
+                      <RouteMap route={r.route} className="rounded-lg" height={170} />
+                      {r.splits && r.splits.length > 0 && (
+                        <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
+                          {r.splits.map((s, i) => (
+                            <span key={i} className="text-[11px] text-dust tabular-nums">
+                              <span className="text-bone/70">Mi {i + 1}</span> {fmtSplit(s)}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           {history.length > 7 && (
             <button
@@ -293,4 +324,10 @@ function fmt(iso: string): string {
     month: "short",
     day: "numeric"
   });
+}
+
+function fmtSplit(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = Math.round(sec % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
 }

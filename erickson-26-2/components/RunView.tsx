@@ -12,6 +12,7 @@ import { useGps, GpsResult } from "@/lib/useGps";
 import { useHeartRate } from "@/lib/useHeartRate";
 import { useWakeLock } from "@/lib/useWakeLock";
 import { getProfile, saveRun } from "@/lib/storage";
+import RouteMap from "./RouteMap";
 
 const TYPE_PACE_KEY: Partial<Record<WorkoutType, HRBandKey>> = {
   easy: "easy", long: "long", tempo: "tempo", intervals: "intervals", race: "halfRace"
@@ -28,6 +29,8 @@ const ZONE_BAR_COLORS = ["bg-dust", "bg-sage", "bg-gold", "bg-goldDim", "bg-embe
 const COUNTDOWN_SEC = 5;
 // Press-and-hold duration to leave the lock-controls overlay.
 const UNLOCK_HOLD_MS = 2000;
+// No GPS fix for this long (while running) → spoken "signal lost" cue.
+const GPS_STALE_MS = 12_000;
 
 function fmtPace(sec: number | null): string {
   if (sec === null || !isFinite(sec) || sec <= 0) return "—";
@@ -109,7 +112,10 @@ export default function RunView({
     if (!voiceOnRef.current) return;
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
     try {
-      window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+      const u = new SpeechSynthesisUtterance(text);
+      u.volume = 1; // max — can't exceed system volume, but never quieter
+      u.rate = 0.98; // a hair slower reads clearer over wind/music
+      window.speechSynthesis.speak(u);
     } catch {
       // speech is best-effort
     }
@@ -140,7 +146,8 @@ export default function RunView({
         const freqs = variant === "alert" ? [880, 1175, 880] : [620, 830];
         const dur = 0.11;
         const gap = 0.06;
-        const peak = variant === "alert" ? 0.28 : 0.16;
+        // Loud enough to cut through music the app can't duck in a browser.
+        const peak = variant === "alert" ? 0.9 : 0.55;
         freqs.forEach((f, i) => {
           const osc = ctx.createOscillator();
           const g = ctx.createGain();
@@ -303,6 +310,41 @@ export default function RunView({
     }
   }, [hr.bpm, heartBand, gps.movingSec, cue]);
 
+  // Spoken alert when the strap drops mid-run, and when it comes back. Only on
+  // real transitions during the live run — skips the initial pairing.
+  const prevHrStatusRef = useRef(hr.status);
+  useEffect(() => {
+    if (phase !== "live") {
+      prevHrStatusRef.current = hr.status;
+      return;
+    }
+    const prev = prevHrStatusRef.current;
+    prevHrStatusRef.current = hr.status;
+    if (prev !== "lost" && hr.status === "lost") {
+      cue("Heart rate signal lost.", "alert");
+    } else if (prev === "lost" && hr.status === "connected") {
+      cue("Heart rate reconnected.", "info");
+    }
+  }, [hr.status, phase, cue]);
+
+  // Spoken alert on a GPS dropout (no fix for GPS_STALE_MS) and its recovery.
+  // gps.movingSec ticks every second, so staleness is caught even when no new
+  // fix is arriving. Paused running is exempt (standing still, signal aside).
+  const gpsLostRef = useRef(false);
+  useEffect(() => {
+    if (phase !== "live" || gps.paused) return;
+    const last = gps.lastFixAt;
+    if (last == null) return;
+    const stale = Date.now() - last > GPS_STALE_MS;
+    if (stale && !gpsLostRef.current) {
+      gpsLostRef.current = true;
+      cue("GPS signal lost.", "alert");
+    } else if (!stale && gpsLostRef.current) {
+      gpsLostRef.current = false;
+      cue("GPS signal back.", "info");
+    }
+  }, [gps.lastFixAt, gps.movingSec, gps.paused, phase, cue]);
+
   // STOP long-press (1.5 s hold; release cancels)
   const [holdPct, setHoldPct] = useState(0);
   const holdTimerRef = useRef<number | null>(null);
@@ -327,12 +369,15 @@ export default function RunView({
   }, [gps.finish, hr.avgBpm, hr.zoneSeconds, hr.disconnect, wake.release, workout.type]);
 
   const startHold = useCallback(() => {
+    if (holdTimerRef.current !== null) return; // guard: a second pointerdown would leak an interval
     holdStartRef.current = Date.now();
     holdTimerRef.current = window.setInterval(() => {
       const pct = (Date.now() - holdStartRef.current) / 1500;
       if (pct >= 1) {
-        window.clearInterval(holdTimerRef.current!);
-        holdTimerRef.current = null;
+        if (holdTimerRef.current !== null) {
+          window.clearInterval(holdTimerRef.current);
+          holdTimerRef.current = null;
+        }
         setHoldPct(0);
         doStop();
       } else {
@@ -356,12 +401,15 @@ export default function RunView({
   const unlockStartRef = useRef(0);
 
   const startUnlock = useCallback(() => {
+    if (unlockTimerRef.current !== null) return; // guard: double pointerdown would leak an interval
     unlockStartRef.current = Date.now();
     unlockTimerRef.current = window.setInterval(() => {
       const pct = (Date.now() - unlockStartRef.current) / UNLOCK_HOLD_MS;
       if (pct >= 1) {
-        window.clearInterval(unlockTimerRef.current!);
-        unlockTimerRef.current = null;
+        if (unlockTimerRef.current !== null) {
+          window.clearInterval(unlockTimerRef.current);
+          unlockTimerRef.current = null;
+        }
         setUnlockPct(0);
         setLocked(false);
         try {
@@ -382,6 +430,33 @@ export default function RunView({
     }
     setUnlockPct(0);
   }, []);
+
+  // Safety net for the hold timers: clear any in-flight interval when the lock
+  // overlay toggles (the button that owns the hold unmounts), when the app is
+  // backgrounded (a missed pointerup would otherwise leak a self-firing
+  // interval — the old "couldn't re-lock" glitch), and on unmount.
+  useEffect(() => {
+    const reset = () => {
+      if (holdTimerRef.current !== null) {
+        window.clearInterval(holdTimerRef.current);
+        holdTimerRef.current = null;
+      }
+      if (unlockTimerRef.current !== null) {
+        window.clearInterval(unlockTimerRef.current);
+        unlockTimerRef.current = null;
+      }
+      setHoldPct(0);
+      setUnlockPct(0);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") reset();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      reset();
+    };
+  }, [locked]);
 
   function save() {
     if (!result) return;
@@ -434,6 +509,21 @@ export default function RunView({
               </div>
             ))}
           </div>
+
+          {result.route.length > 1 && (
+            <div className="bg-coal rounded-xl border border-seam p-3 mt-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-[10px] uppercase tracking-widest text-dust font-display font-semibold">
+                  Route
+                </div>
+                <div className="flex items-center gap-3 text-[10px] text-dust">
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-sage" /> Start</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-ember" /> Finish</span>
+                </div>
+              </div>
+              <RouteMap route={result.route} className="rounded-lg" height={200} />
+            </div>
+          )}
 
           {totalZone > 0 && (
             <div className="bg-coal rounded-xl border border-seam px-4 py-3 mt-3">
@@ -611,10 +701,9 @@ export default function RunView({
   }
 
   // ── Live screen ──
-  const showPairButton = hr.supported && (hr.status === "idle" || hr.status === "lost");
   return (
     <div className="fixed inset-0 z-50 bg-ink">
-      <div className="mx-auto max-w-md h-full flex flex-col px-5 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
+      <div className="relative mx-auto max-w-md h-full flex flex-col px-5 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
         {/* Header strip */}
         <div className="flex items-start justify-between">
           <div className="min-w-0">
@@ -629,25 +718,29 @@ export default function RunView({
               {guide && <> · {guide.target}</>}
             </div>
           </div>
-          <div className="shrink-0 ml-3 flex gap-2">
-            <button
-              onClick={() => setLocked(true)}
-              aria-label="Lock controls"
-              className="w-12 h-12 rounded-lg border bg-coal border-seam text-dust text-lg leading-none"
-            >
-              🔒
-            </button>
-            <button
-              onClick={() => setVoiceOn(!voiceOn)}
-              aria-label={voiceOn ? "Mute voice cues" : "Unmute voice cues"}
-              className={`w-12 h-12 rounded-lg border text-lg leading-none ${
-                voiceOn ? "bg-coal border-gold/40 text-gold" : "bg-coal border-seam text-dust"
-              }`}
-            >
-              {voiceOn ? "🔊" : "🔇"}
-            </button>
-          </div>
+          <button
+            onClick={() => setVoiceOn(!voiceOn)}
+            aria-label={voiceOn ? "Mute voice cues" : "Unmute voice cues"}
+            className={`shrink-0 ml-3 w-12 h-12 rounded-lg border text-lg leading-none ${
+              voiceOn ? "bg-coal border-gold/40 text-gold" : "bg-coal border-seam text-dust"
+            }`}
+          >
+            {voiceOn ? "🔊" : "🔇"}
+          </button>
         </div>
+
+        {/* Lock — floating on the right edge, mid-height: big and thumb-
+            reachable one-handed mid-run, instead of buried in the top corner. */}
+        <button
+          onClick={() => setLocked(true)}
+          aria-label="Lock controls"
+          className="absolute right-3 top-1/2 -translate-y-1/2 z-10 w-16 h-16 rounded-full bg-coal/95 border border-seam text-bone text-2xl leading-none flex flex-col items-center justify-center shadow-lg shadow-black/40 active:scale-95 active:border-gold/60"
+        >
+          🔒
+          <span className="text-[8px] font-display font-bold uppercase tracking-widest text-dust mt-0.5">
+            Lock
+          </span>
+        </button>
 
         {/* Status line */}
         <div className="mt-2 min-h-[20px]">
@@ -702,8 +795,21 @@ export default function RunView({
           </div>
 
           <div>
-            <div className="text-[11px] uppercase tracking-widest text-dust font-display font-semibold">
-              Heart rate
+            <div className="flex items-center justify-between">
+              <div className="text-[11px] uppercase tracking-widest text-dust font-display font-semibold">
+                Heart rate
+              </div>
+              {/* Force a fresh pairing any time — even while connected, in case
+                  readings look wrong and Jon wants to re-test the strap. */}
+              {hr.supported && hr.bpm !== null && (
+                <button
+                  onClick={hr.connect}
+                  aria-label="Re-pair HR strap"
+                  className="text-[10px] font-display font-semibold uppercase tracking-widest text-dust border border-seam rounded-md px-2 py-1 min-h-[32px]"
+                >
+                  ⟳ Re-pair
+                </button>
+              )}
             </div>
             {hr.bpm !== null ? (
               <div
@@ -717,18 +823,34 @@ export default function RunView({
                 )}
               </div>
             ) : (
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3 flex-wrap">
                 <span className="font-display font-bold text-6xl leading-none text-dust">--</span>
-                {showPairButton && (
+                {hr.supported && hr.status === "connecting" && (
+                  <span className="text-xs text-dust animate-pulse">Pairing…</span>
+                )}
+                {hr.supported && hr.status === "lost" && (
+                  <>
+                    <button
+                      onClick={hr.reconnect}
+                      className="bg-gold text-ink rounded-lg px-4 font-display font-bold tracking-widest uppercase text-xs min-h-[48px]"
+                    >
+                      Reconnect
+                    </button>
+                    <button
+                      onClick={hr.connect}
+                      className="bg-coal border border-seam rounded-lg px-4 text-bone font-display font-bold tracking-widest uppercase text-xs min-h-[48px]"
+                    >
+                      Re-pair
+                    </button>
+                  </>
+                )}
+                {hr.supported && hr.status === "idle" && (
                   <button
                     onClick={hr.connect}
                     className="bg-coal border border-seam rounded-lg px-4 text-bone font-display font-bold tracking-widest uppercase text-xs min-h-[48px]"
                   >
                     Pair HR strap
                   </button>
-                )}
-                {hr.status === "connecting" && (
-                  <span className="text-xs text-dust animate-pulse">Pairing…</span>
                 )}
               </div>
             )}

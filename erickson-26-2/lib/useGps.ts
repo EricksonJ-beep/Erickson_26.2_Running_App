@@ -30,7 +30,6 @@ const PACE_WINDOW_MS = 45_000;
 const PACE_MIN_WINDOW_M = 20;
 const AUTOPAUSE_SPEED_MS = 0.5;
 const AUTOPAUSE_AFTER_MS = 15_000;
-const MAX_SEGMENT_GAP_MS = 10_000; // signal loss: don't count the gap as moving time
 const ROUTE_SAMPLE_MS = 5_000;
 const METERS_PER_MILE = 1609.344;
 
@@ -57,12 +56,13 @@ export interface GpsState {
   miles: number;
   currentPaceSec: number | null; // sec per mile over trailing 45 s; null = standing
   avgPaceSec: number | null;
-  elapsedSec: number;
-  movingSec: number;
+  elapsedSec: number; // wall clock since GO (ignores pauses)
+  movingSec: number; // the run clock: wall clock since GO minus manual-pause time
   splits: number[]; // seconds per completed mile
   paused: boolean; // manual
   autoPaused: boolean;
   lastAccuracy: number | null; // m, from the most recent fix (signal sanity check)
+  lastFixAt: number | null; // ms epoch of the most recent fix of any kind; null until first
 }
 
 export interface GpsResult {
@@ -84,13 +84,20 @@ export function useGps(active: boolean) {
     splits: [],
     paused: false,
     autoPaused: false,
-    lastAccuracy: null
+    lastAccuracy: null,
+    lastFixAt: null
   });
 
   const ptsRef = useRef<Pt[]>([]);
   const warmupRef = useRef(0);
   const startRef = useRef(0);
-  const movingMsRef = useRef(0);
+  // Time is a wall-clock stopwatch from GO, minus only the time spent in a
+  // *manual* pause. This is robust to the app being backgrounded (Spotify,
+  // screen off) — it recomputes from timestamps, so no elapsed time is ever
+  // lost the way per-fix accumulation was. Auto-pause is display-only and
+  // never stops this clock.
+  const pauseAccumMsRef = useRef(0); // total manual-paused ms, completed pauses
+  const pauseStartRef = useRef<number | null>(null); // ms epoch of current manual pause
   const splitsRef = useRef<number[]>([]);
   const pausedRef = useRef(false);
   const autoPausedRef = useRef(false);
@@ -100,6 +107,16 @@ export function useGps(active: boolean) {
   const startedRef = useRef(false); // false during countdown pre-warm
   const pendingRef = useRef<{ lat: number; lng: number; t: number } | null>(null);
   const lastAccuracyRef = useRef<number | null>(null);
+  const lastFixAtRef = useRef<number | null>(null); // any fix arriving = we have signal
+
+  // Elapsed active time (ms) at instant `now`: wall clock since GO, less all
+  // manual-pause time (completed + any in-progress pause). Pure timestamp math.
+  const activeMs = useCallback((now: number): number => {
+    if (!startRef.current) return 0;
+    let ms = now - startRef.current - pauseAccumMsRef.current;
+    if (pauseStartRef.current !== null) ms -= now - pauseStartRef.current;
+    return Math.max(0, ms);
+  }, []);
 
   const snapshot = useCallback(() => {
     const pts = ptsRef.current;
@@ -121,7 +138,7 @@ export function useGps(active: boolean) {
       }
     }
 
-    const movingSec = movingMsRef.current / 1000;
+    const movingSec = activeMs(now) / 1000;
     setState({
       status: statusRef.current,
       miles,
@@ -132,9 +149,10 @@ export function useGps(active: boolean) {
       splits: splitsRef.current,
       paused: pausedRef.current,
       autoPaused: autoPausedRef.current,
-      lastAccuracy: lastAccuracyRef.current
+      lastAccuracy: lastAccuracyRef.current,
+      lastFixAt: lastFixAtRef.current
     });
-  }, []);
+  }, [activeMs]);
 
   useEffect(() => {
     if (!active) return;
@@ -149,6 +167,7 @@ export function useGps(active: boolean) {
         const { latitude, longitude, accuracy } = pos.coords;
         const t = Date.now();
         lastAccuracyRef.current = accuracy;
+        lastFixAtRef.current = t; // a fix arrived → signal is alive
         if (accuracy > MAX_ACCURACY_M) {
           snapshot(); // surface the bad-accuracy reading, count nothing
           return;
@@ -217,16 +236,12 @@ export function useGps(active: boolean) {
         const d = prev.d + (autoPausedRef.current ? 0 : stepM);
         ptsRef.current.push({ lat: latitude, lng: longitude, t, d });
 
-        if (!autoPausedRef.current && dt < MAX_SEGMENT_GAP_MS) {
-          movingMsRef.current += dt;
-        }
-
-        // Mile split crossed?
+        // Mile split crossed? Time per mile is the wall-clock stopwatch delta.
         const newMiles = d / METERS_PER_MILE;
         if (Math.floor(newMiles) > Math.floor(prevMiles)) {
-          const movingSecNow = movingMsRef.current / 1000;
+          const activeSecNow = activeMs(t) / 1000;
           const prior = splitsRef.current.reduce((a, b) => a + b, 0);
-          splitsRef.current = [...splitsRef.current, Math.round(movingSecNow - prior)];
+          splitsRef.current = [...splitsRef.current, Math.round(activeSecNow - prior)];
         }
 
         snapshot();
@@ -248,7 +263,7 @@ export function useGps(active: boolean) {
       navigator.geolocation.clearWatch(watchId);
       window.clearInterval(ticker);
     };
-  }, [active, snapshot]);
+  }, [active, snapshot, activeMs]);
 
   // Begin accumulating at GO. Anything captured during pre-warm is discarded;
   // the latest locked fix (if any) becomes the zero-distance baseline so the
@@ -256,7 +271,8 @@ export function useGps(active: boolean) {
   const start = useCallback(() => {
     startedRef.current = true;
     startRef.current = Date.now();
-    movingMsRef.current = 0;
+    pauseAccumMsRef.current = 0;
+    pauseStartRef.current = null;
     splitsRef.current = [];
     pausedRef.current = false;
     autoPausedRef.current = false;
@@ -268,11 +284,18 @@ export function useGps(active: boolean) {
   }, [snapshot]);
 
   const pause = useCallback(() => {
-    pausedRef.current = true;
+    if (!pausedRef.current) {
+      pausedRef.current = true;
+      pauseStartRef.current = Date.now();
+    }
     snapshot();
   }, [snapshot]);
 
   const resume = useCallback(() => {
+    if (pausedRef.current && pauseStartRef.current !== null) {
+      pauseAccumMsRef.current += Date.now() - pauseStartRef.current;
+      pauseStartRef.current = null;
+    }
     pausedRef.current = false;
     lowSpeedSinceRef.current = null;
     autoPausedRef.current = false;
@@ -294,12 +317,12 @@ export function useGps(active: boolean) {
     }
     return {
       miles: (pts[pts.length - 1]?.d ?? 0) / METERS_PER_MILE,
-      movingSec: movingMsRef.current / 1000,
+      movingSec: activeMs(Date.now()) / 1000,
       elapsedSec: startRef.current ? (Date.now() - startRef.current) / 1000 : 0,
       splits: splitsRef.current,
       route
     };
-  }, []);
+  }, [activeMs]);
 
   return { ...state, start, pause, resume, finish };
 }

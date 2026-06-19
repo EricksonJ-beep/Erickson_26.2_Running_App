@@ -99,6 +99,20 @@ export const SEED_RUNS: SeedRun[] = [
     hr: 135,
     notes:
       "Easy. Had to hold back to stay in the HR zone."
+  },
+
+  // Fri long run — first real Run Mode session. App HR didn't pair and in-app
+  // time was buggy (both fixed after this run), so HR + time come from the
+  // Polar H10 / Polar Flow. rev 2 to overwrite any broken partial the app saved.
+  {
+    date: "2026-06-19",
+    miles: 6,
+    minutes: 66,
+    rpe: 5,
+    hr: 146,
+    rev: 2,
+    notes:
+      "Long run around Little Lake Wissota — good run. HR from Polar H10: avg 146, max 172, min 61 — sat mostly 140–150, classic early spike, strong climb to ~170 at the finish. Distance ~6 mi (app GPS was accurate; Polar distance unreliable). Time 66 min from Polar."
   }
 ];
 

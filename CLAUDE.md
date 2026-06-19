@@ -40,7 +40,9 @@ Single page, five bottom tabs (`app/page.tsx`): **Today · Plan · Log · Fuel �
   mileage rule, weekly lactate-threshold work, research-backed tapers. Edit workouts here.
   **Weekly rhythm:** Mon strength · Tue quality (tempo/intervals) · Wed easy · Thu cross-train ·
   Fri optional shakeout · **Sat long run** · **Sun rest**. (`d` in a `Spec` is the day offset
-  from Monday, 0–6.) Past weeks 0–1 keep their original layout as logged history.
+  from Monday, 0–6.) Past weeks 0–1 keep their original layout as logged history. Any workout can
+  carry an optional `note` — a personal route/goal shown as a gold 📍 line on Today + Plan
+  (e.g. wk 14 16-miler = "run around Big Lake Wissota").
 - **HR zone engine** (`lib/zones.ts`) — profile-driven, best method first: LTHR → Friel
   %LTHR; max+resting → Karvonen; max only → %max (Tanaka age estimate, default age 39).
   `hrGuide()` maps each workout type to a target bpm window + zone; shown per-run on **Today**
@@ -48,17 +50,27 @@ Single page, five bottom tabs (`app/page.tsx`): **Today · Plan · Log · Fuel �
 - **Run Mode** (`components/RunView.tsx`) — fullscreen live tracker. GPS (`lib/useGps.ts`),
   live heart rate over Web Bluetooth standard HR service (`lib/useHeartRate.ts`, works with
   Polar H10; Chrome/Android only), screen wake lock (`lib/useWakeLock.ts`). Saves run with
-  GPS route trace + per-mile splits. **Voice coaching** (Web Speech + WebAudio tone + vibrate,
-  master 🔊/🔇 mute): pace+HR cue every ½ mile on every run (`cueIntervalMi`), pace coached to the
-  workout's goal band, and both-direction HR drift alerts (above/below target zone, 25 s debounce,
-  3 min warmup hold). **Phases:** `countdown → live → summary`. A 5→GO countdown (`COUNTDOWN_SEC`)
-  pre-warms GPS — `useGps` runs during the count but only accumulates after `gps.start()` at GO,
-  so cold-start scatter is discarded and tracking begins on a locked fix. **Lock controls** (🔒):
-  full-screen stats-only overlay disabling every control (pocket the phone without mis-taps);
-  hold-to-unlock 2 s (`UNLOCK_HOLD_MS`). Live screen shows a GPS accuracy readout
-  (`gps.lastAccuracy`). GPS tuning: accuracy gate `MAX_ACCURACY_M` 20 m, min-movement gate
-  `MIN_STEP_M` 1 m, Haversine summed per-segment. The phone-locked / background-GPS goal needs a
-  native wrapper — see `erickson-26-2/docs/PHASE2_BACKGROUND_GPS.md` (Capacitor proposal, not built).
+  GPS route trace + per-mile splits, and shows the route as an offline SVG map on the summary
+  (`components/RouteMap.tsx`). **Time = wall-clock stopwatch** from GO minus *manual-pause* time
+  (`useGps` `activeMs()`, timestamp-based so backgrounding can't lose time; auto-pause is
+  display-only, freezes distance but never the clock). **Voice coaching** (Web Speech + WebAudio
+  tone + vibrate, master 🔊/🔇 mute): pace+HR cue every ½ mile (`cueIntervalMi`), pace coached to the
+  workout's goal band, both-direction HR drift alerts (25 s debounce, 3 min warmup hold), plus
+  spoken "Heart rate signal lost/reconnected" and "GPS signal lost/back" (`GPS_STALE_MS` 12 s via
+  `useGps.lastFixAt`). Tones are loud (alert/info gain 0.9/0.55) to punch through music — a browser
+  PWA can't actually duck Spotify (no audio focus; needs the native shell). **Mid-run HR re-pair:**
+  `useHeartRate` auto-reconnects all run long (backoff caps 8 s, no try limit); `connect()` is a
+  clean re-pair (works even while "connected"); `reconnect()` is one-tap retry. Live screen surfaces
+  ⟳ Re-pair (connected) / Reconnect+Re-pair (lost) / Pair (idle). **Phases:** `countdown → live →
+  summary`. A 5→GO countdown (`COUNTDOWN_SEC`) pre-warms GPS — only accumulates after `gps.start()`
+  at GO, so cold-start scatter is discarded. **Lock controls** (🔒): floating circular FAB on the
+  right edge at mid-height (`top-1/2`, thumb-reachable one-handed); full-screen stats-only overlay
+  disabling every control; hold-to-unlock 2 s (`UNLOCK_HOLD_MS`). Hold timers are guarded against a
+  double-pointerdown interval leak + reset on lock-toggle/background/unmount (fixed the old
+  "couldn't re-lock" glitch). Live screen shows a GPS accuracy readout (`gps.lastAccuracy`). GPS
+  tuning: accuracy gate `MAX_ACCURACY_M` 20 m, min-movement gate `MIN_STEP_M` 1 m, Haversine summed
+  per-segment. The phone-locked / background-GPS + music-ducking goals need a native wrapper — see
+  `erickson-26-2/docs/PHASE2_BACKGROUND_GPS.md` (Capacitor proposal, not built).
 - **Fitness tests** (`components/HRTestView.tsx`) — fullscreen, strap-paired field tests launched
   from the Progress tab that measure the two numbers the zone engine wants, instead of estimating.
   **Max HR:** graded build-to-failure run (~8 min: build → hard → very hard → all-out sprint, with
@@ -91,6 +103,9 @@ Single page, five bottom tabs (`app/page.tsx`): **Today · Plan · Log · Fuel �
   runs/body data Jon reports in chat. rev 1 only fills empty dates (phone data wins); rev 2+ is a
   correction and overwrites. `push = deploy`.
 - **Progress** (`components/ProgressView.tsx`) — trends + JSON **export/import** backup.
+- **Run route map** (`components/RouteMap.tsx`) — offline SVG trace of a saved GPS route (no tiles,
+  no deps); start/finish dots, VOLT colors. On the Run Mode summary, and behind a per-run "Map"
+  toggle in **Log** history (expands trace + per-mile splits). Street-map tiles deferred to native.
 - **PWA** — `public/manifest.json` + `public/sw.js` service worker, installable, offline.
 
 ## Data Model (`lib/storage.ts`)
@@ -99,10 +114,19 @@ All in `localStorage`, keys `hr_*_v1`: `RunLog` (incl. optional `route`, `splits
 completions) and `seeded` (dedupe ledger). `exportAll`/`importAll` cover everything.
 
 ## In Progress / Next Up
-- [ ] **Awaiting Jon's first real Run Mode session.** Voice coaching (pace-to-target + both-direction
-      HR drift alerts + beep/vibrate) shipped but is untested on real hardware (this dev env has no
-      GPS/Bluetooth/speaker). After his first run, tune wording/thresholds; likely tweak = exempt
-      **interval** days from HR alerts if they nag mid-rep (one-line change in `RunView.tsx`).
+- [x] **Jon's first real Run Mode session happened (Jun 19 2026, Little Lake 6-miler).** Surfaced
+      bugs/requests, all addressed this session: time was wrong (per-fix accumulation dropped
+      backgrounded time → now a wall-clock stopwatch); HR wasn't paired & couldn't relink mid-run
+      (→ re-pair UI + infinite auto-reconnect); lock mode glitched/wouldn't re-lock (→ interval-leak
+      guard) and the button moved to a thumb-reachable FAB; added offline route map, per-workout
+      route notes, and HR-lost/GPS-lost voice cues + louder tones. He ran Polar Flow in parallel
+      (will keep doing so until this app's HR/time prove accurate) — he'll hand over Polar data
+      (avg HR 145, max 172) to seed today's run manually. See `[[project_runmode_v2_punchlist]]`.
+- [ ] **Native shell (Capacitor) is now the main lever.** Two things a browser PWA can't do, both
+      requested: (1) reliable background GPS when the phone is pocketed/screen-off; (2) ducking
+      Spotify during voice cues (no audio focus on web — #7 only made our cues louder). Both live in
+      `docs/PHASE2_BACKGROUND_GPS.md`. Also still possible in-browser if he wants: exempt **interval**
+      days from HR drift alerts if they nag mid-rep (one-liner in `RunView.tsx`).
 - [ ] **Sharpen HR zones with real data.** Zones still use an *estimated* max HR (Tanaka, age 39) —
       profile holds only `{age:39, maxHR:181}` (Jon set Tanaka explicitly; identical to the fallback,
       so zones are unchanged). **Now built:** Progress → Fitness tests runs guided strap-paired max-HR

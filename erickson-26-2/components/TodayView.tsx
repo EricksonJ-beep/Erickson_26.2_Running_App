@@ -128,6 +128,9 @@ export default function TodayView({ onGoLog }: { onGoLog: () => void }) {
                 </div>
               </div>
               <p className="text-sm text-bone/85 mt-3 leading-relaxed">{workout.detail}</p>
+              {workout.note && (
+                <p className="text-sm text-gold mt-2 leading-relaxed">📍 {workout.note}</p>
+              )}
 
               {/* Logged run summary */}
               {loggedRun && (

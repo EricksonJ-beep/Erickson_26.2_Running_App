@@ -24,6 +24,7 @@ export interface Workout {
   detail: string;
   miles: number; // planned run miles (0 for non-running)
   optional?: boolean;
+  note?: string; // personal route/goal note (e.g. "Run around Big Lake")
 }
 
 export type Phase = "Base" | "Half Build" | "Recovery Bridge" | "Marathon Build" | "Taper" | "Race Week";
@@ -80,6 +81,7 @@ interface Spec {
   detail: string;
   miles?: number;
   optional?: boolean;
+  note?: string; // personal route/goal note
 }
 
 function addDays(iso: string, n: number): string {
@@ -95,7 +97,8 @@ function wk(num: number, phase: Phase, start: string, focus: string, specs: Spec
     title: s.title,
     detail: s.detail,
     miles: s.miles ?? 0,
-    optional: s.optional
+    optional: s.optional,
+    note: s.note
   }));
   const plannedMiles = workouts.reduce((a, w) => a + w.miles, 0);
   return { num, phase, start, focus, plannedMiles, workouts };
@@ -138,7 +141,7 @@ export const PLAN: Week[] = [
     { d: 1, type: "tempo", title: "Tempo intro", detail: "1 mi easy → 1 mi @ tempo (9:05–9:15) → 1 mi easy.", miles: 3 },
     { d: 2, type: "easy", title: "Easy run", detail: "3 mi conversational.", miles: 3 },
     XT(3),
-    { d: 4, type: "long", title: "Long run", detail: "6 mi relaxed. Moved to Friday — you leave for the Canada canoe trip Saturday the 20th.", miles: 6 }
+    { d: 4, type: "long", title: "Long run", detail: "6 mi relaxed. Moved to Friday — you leave for the Canada canoe trip Saturday the 20th.", miles: 6, note: "Ran around Little Lake Wissota — good run." }
   ]),
   wk(3, "Half Build", "2026-06-22", "Off-grid canoe trip in Canada most of the week — portaging carries the load. No intervals; easy miles only if they happen. Mileage will dip, and that's fine. The long run waits for your return.", [
     { d: 0, type: "xt", title: "Canoe trip — Canada", detail: "Off-grid Mon–Fri. Paddling and portaging are the cross-training — legs, back, and heavy carries. No intervals this week, and no app updates until you're back; log what you can after.", optional: true },
@@ -221,7 +224,7 @@ export const PLAN: Week[] = [
     { d: 2, type: "easy", title: "Easy run", detail: "4 mi conversational.", miles: 4 },
     XT(3),
     { d: 4, type: "easy", title: "Easy run", detail: "2 mi very relaxed.", miles: 2 },
-    { d: 5, type: "long", title: "Long run", detail: "16 mi relaxed. Practice full race nutrition: fuel + fluids on schedule.", miles: 16 }
+    { d: 5, type: "long", title: "Long run", detail: "16 mi relaxed. Practice full race nutrition: fuel + fluids on schedule.", miles: 16, note: "Goal: run around Big Lake Wissota." }
   ]),
   wk(15, "Marathon Build", "2026-09-14", "Cutback week. Absorb the gains.", [
     STR(0),

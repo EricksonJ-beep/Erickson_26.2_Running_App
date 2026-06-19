@@ -344,6 +344,9 @@ function DayRow({
         </div>
       )}
       <p className="text-[11px] text-dust mt-1 ml-[18px] leading-snug">{x.detail}</p>
+      {x.note && (
+        <p className="text-[11px] text-gold mt-0.5 ml-[18px] leading-snug">📍 {x.note}</p>
+      )}
     </div>
   );
 }

@@ -35,8 +35,10 @@ interface BTApi {
   requestDevice(options: { filters: { services: string[] }[] }): Promise<BTDevice>;
 }
 
-const MAX_RECONNECTS = 3;
-const RECONNECT_DELAYS_MS = [1000, 3000, 6000];
+// Auto-reconnect backoff (ms). The last value repeats — we keep retrying a
+// dropped strap for the whole run instead of giving up after a few tries, so a
+// brief out-of-range moment or a sweat/contact blip doesn't kill HR for good.
+const RECONNECT_DELAYS_MS = [1000, 2000, 4000, 6000, 8000];
 const MAX_SAMPLE_GAP_S = 5; // don't credit zone time across signal gaps
 
 // Flags byte bit 0: 0 → uint8 HR at offset 1, 1 → uint16 LE at offset 1.
@@ -56,12 +58,14 @@ export function useHeartRate() {
   const [deviceName, setDeviceName] = useState<string | null>(null);
 
   const deviceRef = useRef<BTDevice | null>(null);
+  const charRef = useRef<BTCharacteristic | null>(null); // for clean listener teardown
   const zonesRef = useRef(computeZones(typeof window === "undefined" ? {} : getProfile()));
   const zoneSecondsRef = useRef([0, 0, 0, 0, 0]);
   const weightedSumRef = useRef(0); // Σ bpm·dt for time-weighted average
   const weightSecRef = useRef(0);
   const lastSampleRef = useRef(0);
   const reconnectsRef = useRef(0);
+  const reconnectingRef = useRef(false); // a retry loop is in flight
   const closedRef = useRef(false);
 
   const zoneOf = useCallback((hr: number): number | null => {
@@ -99,35 +103,57 @@ export function useHeartRate() {
       const service = await server.getPrimaryService("heart_rate");
       const ch = await service.getCharacteristic("heart_rate_measurement");
       await ch.startNotifications();
+      // Drop any stale listener from a prior subscription so a re-pair or
+      // reconnect can't end up double-counting measurements.
+      charRef.current?.removeEventListener("characteristicvaluechanged", onMeasurement);
       ch.addEventListener("characteristicvaluechanged", onMeasurement);
+      charRef.current = ch;
       reconnectsRef.current = 0;
       setStatus("connected");
     },
     [onMeasurement]
   );
 
+  // Strap dropped: keep retrying the known device with backoff for the whole
+  // run (the last delay repeats). One loop at a time, guarded by reconnectingRef.
   const handleDisconnect = useCallback(async () => {
-    if (closedRef.current) return;
+    if (closedRef.current || reconnectingRef.current) return;
+    reconnectingRef.current = true;
     setStatus("lost");
     setBpm(null);
     const device = deviceRef.current;
-    while (device && reconnectsRef.current < MAX_RECONNECTS && !closedRef.current) {
-      const delay = RECONNECT_DELAYS_MS[reconnectsRef.current];
+    while (device && !closedRef.current) {
+      const delay = RECONNECT_DELAYS_MS[Math.min(reconnectsRef.current, RECONNECT_DELAYS_MS.length - 1)];
       reconnectsRef.current++;
       await new Promise((r) => setTimeout(r, delay));
-      if (closedRef.current) return;
+      if (closedRef.current) break;
       try {
-        await subscribe(device);
-        return;
+        await subscribe(device); // resets the backoff on success
+        break;
       } catch {
-        // strap still out of range — next backoff step
+        // strap still out of range — keep backing off and retrying
       }
     }
+    reconnectingRef.current = false;
   }, [subscribe]);
 
-  // Must run inside a user gesture (button tap) per the Web Bluetooth spec.
+  // Full (re-)pair: opens the device chooser. Must run inside a user gesture
+  // per the Web Bluetooth spec. Tears down any prior device first so the user
+  // can force a clean re-pair mid-run even while it shows "connected".
   const connect = useCallback(async () => {
     if (!supported) return;
+    const prev = deviceRef.current;
+    if (prev) {
+      try {
+        prev.removeEventListener("gattserverdisconnected", handleDisconnect);
+        prev.gatt?.disconnect();
+      } catch {
+        // ignore
+      }
+    }
+    charRef.current = null;
+    closedRef.current = false; // revive the reconnect machinery
+    reconnectsRef.current = 0;
     try {
       setStatus("connecting");
       const bt = (navigator as Navigator & { bluetooth: BTApi }).bluetooth;
@@ -142,17 +168,41 @@ export function useHeartRate() {
     }
   }, [supported, subscribe, handleDisconnect]);
 
+  // One-tap recovery: re-subscribe the already-paired strap without reopening
+  // the chooser. Falls back to a full pair if no device is known yet.
+  const reconnect = useCallback(async () => {
+    const device = deviceRef.current;
+    if (!device) return connect();
+    closedRef.current = false;
+    setStatus("connecting");
+    try {
+      await subscribe(device);
+    } catch {
+      handleDisconnect(); // drop into the backoff retry loop
+    }
+  }, [connect, subscribe, handleDisconnect]);
+
   const disconnect = useCallback(() => {
     closedRef.current = true;
+    try {
+      charRef.current?.removeEventListener("characteristicvaluechanged", onMeasurement);
+    } catch {
+      // ignore
+    }
     deviceRef.current?.gatt?.disconnect();
-  }, []);
+  }, [onMeasurement]);
 
   useEffect(() => {
     return () => {
       closedRef.current = true;
+      try {
+        charRef.current?.removeEventListener("characteristicvaluechanged", onMeasurement);
+      } catch {
+        // ignore
+      }
       deviceRef.current?.gatt?.disconnect();
     };
-  }, []);
+  }, [onMeasurement]);
 
   const avgBpm =
     weightSecRef.current > 0
@@ -167,7 +217,8 @@ export function useHeartRate() {
     deviceName,
     zone: bpm !== null ? zoneOf(bpm) : null, // 0-indexed: 0 → Z1
     zoneSeconds: zoneSecondsRef.current,
-    connect,
+    connect, // full (re-)pair via the chooser
+    reconnect, // one-tap retry of the known strap, no chooser
     disconnect
   };
 }
