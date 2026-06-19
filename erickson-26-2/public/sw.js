@@ -1,4 +1,4 @@
-const CACHE = 'erickson-v4';
+const CACHE = 'erickson-v5'; // bump to purge stale cached icons/manifest (v4 served the old logo)
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/'])));
