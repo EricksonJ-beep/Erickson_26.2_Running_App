@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────
 // HORNET RUNNER — 18-week dual-race plan
-// Half Marathon: Chippewa Falls, Sat Aug 8 2026 (goal 2:00)
+// Half Marathon: Chippewa Falls, Sat Aug 8 2026 (goal: sub-2:00 — race 9:00/mi, 9:09 redline)
 // Marathon:      Ashland,        Sat Oct 10 2026 (goal: finish strong)
 // Built on 80/20 intensity distribution, the 10% mileage rule,
 // weekly lactate-threshold work, and research-backed taper windows.
@@ -46,7 +46,7 @@ export const PACES = {
   long: "10:30–11:15 /mi",
   tempo: "9:05–9:15 /mi",
   intervals: "8:20–8:35 /mi",
-  halfRace: "9:09 /mi",
+  halfRace: "9:00 /mi",
   marathon: "9:35–9:45 /mi"
 };
 
@@ -57,7 +57,7 @@ export const PACE_BANDS: Record<keyof typeof PACES, { lo: number; hi: number }> 
   long: { lo: 630, hi: 675 },
   tempo: { lo: 545, hi: 555 },
   intervals: { lo: 500, hi: 515 },
-  halfRace: { lo: 539, hi: 559 },
+  halfRace: { lo: 530, hi: 550 }, // 8:50–9:10, centered on 9:00 goal; 9:09 is the sub-2:00 redline
   marathon: { lo: 575, hi: 585 }
 };
 
@@ -69,7 +69,7 @@ export const PACE_NOTES: Record<string, string> = {
   long: "Relaxed and steady. Builds the aerobic engine — 80% of the work lives here.",
   tempo: "Comfortably hard. Short phrases only. This is lactate-threshold training.",
   intervals: "Hard but controlled. You should finish the last rep able to do one more.",
-  halfRace: "Goal pace for 2:00 at Chippewa Falls.",
+  halfRace: "9:00/mi banks a ~2 min cushion under 2:00. 9:09 is the sub-2:00 redline — don't drift slower, except by design going up the mile-5 hill.",
   marathon: "Projected marathon effort. Practice it; don't race it in training."
 };
 
@@ -167,7 +167,7 @@ export const PLAN: Week[] = [
     { d: 1, type: "tempo", title: "Tempo", detail: "1 mi easy → 2 mi continuous @ tempo → 1 mi easy.", miles: 4 },
     { d: 2, type: "easy", title: "Easy run", detail: "4 mi conversational.", miles: 4 },
     XT(3),
-    { d: 5, type: "long", title: "Long run", detail: "10 mi relaxed on a rolling route — Chippewa's mile-5 hill is coming. Fuel mid-run (gel or chews around mile 5).", miles: 10 }
+    { d: 5, type: "long", title: "Long run", detail: "10 mi on a rolling route — first 8 relaxed, last 2 @ goal pace (9:00). Race pace on tired legs is the point. Chippewa's mile-5 hill is coming; fuel mid-run (gel or chews around mile 5).", miles: 10 }
   ]),
   wk(7, "Half Build", "2026-07-20", "Peak week of the half build.", [
     STR(0),
@@ -179,14 +179,14 @@ export const PLAN: Week[] = [
   ]),
   wk(8, "Half Build", "2026-07-27", "Taper begins. Volume drops, sharpness stays.", [
     STR(0),
-    { d: 1, type: "tempo", title: "Race-pace tempo", detail: "1 mi easy → 2 mi @ half race pace (9:09) → 1 mi easy.", miles: 4 },
+    { d: 1, type: "tempo", title: "Race-pace tempo", detail: "1 mi easy → 2 mi @ goal pace (9:00) → 1 mi easy. This pace should feel repeatable, not hard.", miles: 4 },
     { d: 2, type: "easy", title: "Easy run", detail: "3 mi conversational.", miles: 3 },
     { d: 5, type: "long", title: "Long run — taper", detail: "8 mi relaxed, last 2 @ race pace. Lock in pacing feel.", miles: 8 }
   ]),
   wk(9, "Race Week", "2026-08-03", "Chippewa Falls. Trust the work.", [
     { d: 1, type: "easy", title: "Easy + strides", detail: "3 mi easy + 4×20-sec strides. Legs stay awake, nothing more.", miles: 3 },
     { d: 3, type: "easy", title: "Shakeout", detail: "2 mi very easy.", miles: 2 },
-    { d: 5, type: "race", title: "HALF MARATHON — Chippewa Falls", detail: "13.1 @ 9:09 average. Even effort, not even splits: give time back on the mile 4–5 hill, collect it on the descent. Save a gear for the uphill finish. Hydrate every station.", miles: 13.1 }
+    { d: 5, type: "race", title: "HALF MARATHON — Chippewa Falls", detail: "13.1 @ 9:00 average → ~1:57:54, a 2-min cushion under 2:00 (9:09 is the redline). Even effort, not even splits: bank seconds on the flats, spend them on the mile 4–5 hill, collect them back on the descent. Save a gear for the uphill finish. Hydrate every station.", miles: 13.1, note: "Goal: break 2:00. Race at 9:00/mi, never let average slip past 9:09." }
   ]),
 
   // ── PHASE 2 · RECOVERY BRIDGE ──
