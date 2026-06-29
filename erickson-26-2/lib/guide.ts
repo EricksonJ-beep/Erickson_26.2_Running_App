@@ -48,7 +48,7 @@ export interface RaceIntel {
   race: string;
   facts: { label: string; value: string; note: string }[];
   takeaways: string[];
-  routeMap?: { src: string; caption?: string }; // course map image in public/
+  courseMaps?: { src: string; caption?: string }[]; // course/elevation images in public/
 }
 
 export const RACE_INTEL: RaceIntel[] = [
@@ -68,7 +68,10 @@ export const RACE_INTEL: RaceIntel[] = [
       "The last mile dips, then climbs to the finish. Save a gear — a 2:00 finish comes from even effort, not even splits.",
       "Run some July tempos and long runs on rolling routes so race day's profile feels familiar."
     ],
-    routeMap: { src: "/half-route-map.png", caption: "Pure Water Days Half course — tap to zoom" }
+    courseMaps: [
+      { src: "/half-route-map.png", caption: "Pure Water Days Half course — tap to zoom" },
+      { src: "/half-elevation.png", caption: "Elevation — the mile-5 climb to ~1,125 ft, then net downhill to the mile-12 dip" }
+    ]
   },
   {
     title: "Race intel · Ashland 26.2",

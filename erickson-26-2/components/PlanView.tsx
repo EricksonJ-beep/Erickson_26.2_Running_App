@@ -178,7 +178,7 @@ export default function PlanView() {
           {RACE_INTEL.map((r) => (
             <GuideCard key={r.title} title={r.title}>
               <div className="text-[11px] text-dust mb-2">{r.race}</div>
-              {r.routeMap && <RouteMapImage {...r.routeMap} />}
+              {r.courseMaps?.map((m) => <RouteMapImage key={m.src} {...m} />)}
               <div className="grid grid-cols-2 gap-2 mb-3">
                 {r.facts.map((f) => (
                   <div key={f.label} className="bg-ink rounded-lg px-3 py-2">

@@ -86,7 +86,11 @@ Single page, five bottom tabs (`app/page.tsx`): **Today · Plan · Log · Fuel �
 - **Daily 100s** (`components/TodayView.tsx`) — pushup/situp counters, goal 100 each per day
   (`CALIS_GOAL`, `CalisLog` in storage). Progress tab shows a streak/totals card (`HundredsCard`).
 - **Coach's guide** (`lib/guide.ts`) — effort anchors on the 1–10 RPE scale, WhistleStop race
-  intel, setback/roadblock playbook. Surfaced in Plan/Today/Log.
+  intel, setback/roadblock playbook. Surfaced in Plan/Today/Log. `RaceIntel.courseMaps` embeds
+  course images (in `public/`) at the top of an intel card — Chippewa Falls 13.1 shows the official
+  Pure Water Days/YMCA route map + the elevation profile (`public/half-route-map.png`,
+  `half-elevation.png`); tap to open full-res, SW runtime-caches them for offline course recon.
+  Rendered by `RouteMapImage` in `PlanView` (each hides itself if its asset is missing).
 - **Fueling & hydration playbook** (`FUELING_GUIDE` in `lib/guide.ts`) — evidence-based fuel/hydration
   reference under Plan → Coach's guide, as collapsible cards rendered by `FuelGuideBody` in `PlanView`.
   Tuned for ~95 kg (targets scale w/ weight, flagged via `FUEL_NOTE`). Covers: two-tank glycogen/fat
