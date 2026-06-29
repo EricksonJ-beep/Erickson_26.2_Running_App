@@ -113,6 +113,16 @@ export const SEED_RUNS: SeedRun[] = [
     rev: 3,
     notes:
       "Long run around Little Lake Wissota — good run. HR from Polar H10: avg 146, max 172, min 61 — sat mostly 140–150, classic early spike, strong climb to ~170 at the finish. Distance ~6 mi (app GPS was accurate; Polar distance unreliable). Time 72 min from Polar (~12:00/mi)."
+  },
+
+  // Week 4 — Mon was a strength day; swapped it for running with the XC team.
+  {
+    date: "2026-06-29",
+    miles: 3.3,
+    minutes: 30,
+    rpe: 6,
+    notes:
+      "Two-part run with the cross country team (subbed for Mon strength). 1) Team \"pack run\" on the track — 1.5 mi @ 7:35 pace, rotating the back runner to the front; felt fast and strong. 2) Easy cooldown — 1.8 mi @ 10:30 pace. Legs felt great, no issues. Total 3.3 mi (~30 min); blended pace ~9:10/mi but it was hard-then-easy, not steady."
   }
 ];
 
