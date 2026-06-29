@@ -178,6 +178,7 @@ export default function PlanView() {
           {RACE_INTEL.map((r) => (
             <GuideCard key={r.title} title={r.title}>
               <div className="text-[11px] text-dust mb-2">{r.race}</div>
+              {r.routeMap && <RouteMapImage {...r.routeMap} />}
               <div className="grid grid-cols-2 gap-2 mb-3">
                 {r.facts.map((f) => (
                   <div key={f.label} className="bg-ink rounded-lg px-3 py-2">
@@ -285,6 +286,25 @@ function FuelGuideBody({ guide }: { guide: FuelGuide }) {
         </div>
       ))}
     </div>
+  );
+}
+
+// Course map image (lives in public/). Tap opens it full-res for pinch-zoom.
+// Hides itself if the asset is missing so the card never shows a broken image.
+function RouteMapImage({ src, caption }: { src: string; caption?: string }) {
+  const [ok, setOk] = useState(true);
+  if (!ok) return null;
+  return (
+    <a href={src} target="_blank" rel="noopener noreferrer" className="block mb-3">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt={caption ?? "Race course map"}
+        onError={() => setOk(false)}
+        className="w-full rounded-lg border border-seam bg-ink"
+      />
+      {caption && <div className="text-[10px] text-dust mt-1 text-center">{caption}</div>}
+    </a>
   );
 }
 

@@ -48,6 +48,7 @@ export interface RaceIntel {
   race: string;
   facts: { label: string; value: string; note: string }[];
   takeaways: string[];
+  routeMap?: { src: string; caption?: string }; // course map image in public/
 }
 
 export const RACE_INTEL: RaceIntel[] = [
@@ -66,7 +67,8 @@ export const RACE_INTEL: RaceIntel[] = [
       "Practice controlled downhill running: short, quick steps, let gravity do the work. The drop off the hill is where free speed lives.",
       "The last mile dips, then climbs to the finish. Save a gear — a 2:00 finish comes from even effort, not even splits.",
       "Run some July tempos and long runs on rolling routes so race day's profile feels familiar."
-    ]
+    ],
+    routeMap: { src: "/half-route-map.png", caption: "Pure Water Days Half course — tap to zoom" }
   },
   {
     title: "Race intel · Ashland 26.2",
