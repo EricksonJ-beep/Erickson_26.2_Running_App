@@ -34,7 +34,7 @@ export default function RecoveryTestView({
 }: {
   endHR: number;
   hr: ReturnType<typeof useHeartRate>;
-  runType: WorkoutType;
+  runType?: WorkoutType; // omitted for a standalone test (no workout to tag)
   cue: (text: string, variant?: "info" | "alert") => void;
   onDone: (test: RecoveryTest) => void; // record saved with the run
   onSkip: () => void; // discarded — no record
@@ -245,7 +245,7 @@ export default function RecoveryTestView({
               {/* Flags */}
               <div className="flex flex-wrap gap-2 mt-3">
                 <span className="text-[10px] uppercase tracking-widest font-display font-semibold text-dust bg-coal border border-seam rounded-md px-2 py-1">
-                  {runType} run
+                  {runType ? `${runType} run` : "Standalone"}
                 </span>
                 {result.incomplete && (
                   <span className="text-[10px] uppercase tracking-widest font-display font-semibold text-ember bg-ember/15 border border-ember/40 rounded-md px-2 py-1">

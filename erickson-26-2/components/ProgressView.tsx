@@ -4,12 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { PLAN, Phase, daysUntil, findWeek, todayISO } from "@/lib/plan";
 import { computeZones, methodLabel } from "@/lib/zones";
 import {
-  CALIS_GOAL, CalisLog, exportAll, getBody, getCalis, getDone, getProfile, getRuns,
-  importAll, paceOf, saveProfile, Profile
+  CALIS_GOAL, CalisLog, exportAll, getBody, getCalis, getDone, getProfile, getRecoveryTests,
+  getRuns, importAll, paceOf, saveProfile, Profile
 } from "@/lib/storage";
 import { hrr1BandInfo, HRR1_LOW_FLAG } from "@/lib/recovery";
 import DiagnosticsView from "@/components/DiagnosticsView";
 import HRTestView from "@/components/HRTestView";
+import QuickTestView from "@/components/QuickTestView";
 
 const PHASE_COLOR: Record<Phase, string> = {
   "Base": "bg-dust",
@@ -25,6 +26,7 @@ export default function ProgressView() {
   const [, force] = useState(0);
   const [diagnostics, setDiagnostics] = useState(false);
   const [hrTest, setHrTest] = useState(false);
+  const [quickTest, setQuickTest] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   useEffect(() => setToday(todayISO()), []);
   if (!today) return null;
@@ -94,6 +96,9 @@ export default function ProgressView() {
 
       {/* Fitness tests — fullscreen, writes max HR / LTHR to the profile */}
       {hrTest && <HRTestView onClose={() => setHrTest(false)} onSaved={() => force((n) => n + 1)} />}
+
+      {/* Quick tests — fullscreen, resting HR (→ profile) + standalone recovery */}
+      {quickTest && <QuickTestView onClose={() => setQuickTest(false)} onSaved={() => force((n) => n + 1)} />}
 
       {/* Stats grid */}
       <div className="grid grid-cols-2 gap-3">
@@ -248,6 +253,21 @@ export default function ProgressView() {
           className="mt-3 w-full bg-ink border border-seam text-bone font-display font-bold uppercase tracking-wider rounded-lg py-3 text-sm min-h-[48px]"
         >
           ⚙ Open sensor check
+        </button>
+      </div>
+
+      {/* Quick tests — resting HR + standalone recovery, any time, no run */}
+      <div className="bg-coal rounded-2xl border border-seam p-5">
+        <h2 className="font-display font-bold text-xl text-bone">Resting HR &amp; recovery</h2>
+        <p className="text-[11px] text-dust mt-0.5 leading-snug">
+          Two quick strap tests, no run needed. Capture your resting heart rate — it saves to your
+          profile and sharpens zones — or run a standalone heart-rate recovery check any time.
+        </p>
+        <button
+          onClick={() => setQuickTest(true)}
+          className="mt-3 w-full bg-ink border border-seam text-bone font-display font-bold uppercase tracking-wider rounded-lg py-3 text-sm min-h-[48px]"
+        >
+          ❤ Open quick tests
         </button>
       </div>
 
@@ -475,12 +495,17 @@ function fmtShortDate(iso: string): string {
   });
 }
 
-// HRR trend — every saved run that carries a completed recovery test (HRR1).
+// HRR trend — run-attached recovery tests + standalone ones from Quick tests.
 function RecoveryCard() {
-  const tests = Object.values(getRuns())
+  const runTests = Object.values(getRuns())
     .filter((r) => r.recoveryTest && r.recoveryTest.hrr1 != null)
-    .sort((a, b) => (a.date < b.date ? -1 : 1)) // oldest → newest
     .map((r) => ({ date: r.date, t: r.recoveryTest! }));
+  const soloTests = getRecoveryTests()
+    .filter((t) => t.hrr1 != null)
+    .map((t) => ({ date: t.completedAt.slice(0, 10), t }));
+  const tests = [...runTests, ...soloTests].sort((a, b) =>
+    a.t.completedAt < b.t.completedAt ? -1 : 1
+  ); // oldest → newest
   if (tests.length === 0) return null;
 
   const drops = tests.map((x) => Math.max(0, x.t.hrr1!));
@@ -497,7 +522,7 @@ function RecoveryCard() {
     <div className="bg-coal rounded-2xl border border-seam p-5">
       <h2 className="font-display font-bold text-xl text-bone">HR recovery</h2>
       <p className="text-[11px] text-dust mt-0.5 leading-snug">
-        One-minute HR drop after each run (HRR1). Bigger drop = faster recovery.
+        One-minute HR drop after a run or standalone test (HRR1). Bigger drop = faster recovery.
       </p>
 
       <div className="grid grid-cols-3 gap-3 mt-3">
@@ -524,9 +549,9 @@ function RecoveryCard() {
           const band = x.t.hrr1Label ? hrr1BandInfo(x.t.hrr1Label) : null;
           return (
             <div
-              key={x.date}
+              key={x.t.completedAt}
               className="flex-1 flex flex-col justify-end h-full"
-              title={`${fmtShortDate(x.date)}: −${d} bpm${x.t.runType ? ` · ${x.t.runType}` : ""}`}
+              title={`${fmtShortDate(x.date)}: −${d} bpm · ${x.t.runType ?? "solo"}`}
             >
               <div
                 className={`w-full rounded-t ${band?.bar ?? "bg-dust"}`}
@@ -550,7 +575,7 @@ function RecoveryCard() {
           .map((x) => {
             const band = x.t.hrr1Label ? hrr1BandInfo(x.t.hrr1Label) : null;
             return (
-              <div key={x.date} className="flex items-center gap-2 text-sm bg-ink rounded-lg px-3 py-1.5">
+              <div key={x.t.completedAt} className="flex items-center gap-2 text-sm bg-ink rounded-lg px-3 py-1.5">
                 <span className="text-xs text-dust w-12 shrink-0">{fmtShortDate(x.date)}</span>
                 <span className={`font-display font-semibold tabular-nums w-12 ${band?.text ?? "text-bone"}`}>
                   −{Math.max(0, x.t.hrr1!)}
@@ -558,9 +583,7 @@ function RecoveryCard() {
                 {x.t.hrr2 != null && (
                   <span className="text-xs text-dust tabular-nums">−{Math.max(0, x.t.hrr2)} @2m</span>
                 )}
-                {x.t.runType && (
-                  <span className="text-[10px] uppercase tracking-widest text-dust ml-auto">{x.t.runType}</span>
-                )}
+                <span className="text-[10px] uppercase tracking-widest text-dust ml-auto">{x.t.runType ?? "solo"}</span>
                 {x.t.incomplete && <span className="text-[10px] text-ember">partial</span>}
               </div>
             );

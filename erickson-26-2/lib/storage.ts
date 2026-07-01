@@ -73,6 +73,7 @@ export const CALIS_GOAL = 100;
 
 const RUNS_KEY = "hr_runs_v1";
 const CALIS_KEY = "hr_calis_v1";
+const RECOVERY_KEY = "hr_recovery_v1"; // standalone HRR tests (Progress), not tied to a run
 const DONE_KEY = "hr_done_v1"; // workout date -> true (non-run completions: XT, strength)
 const PROFILE_KEY = "hr_profile_v1";
 const BODY_KEY = "hr_body_v1";
@@ -108,6 +109,17 @@ export function deleteRun(date: string) {
   const all = getRuns();
   delete all[date];
   write(RUNS_KEY, all);
+}
+
+// Standalone HRR tests run from the Progress tab (no run to attach to).
+// Run-attached recovery tests still live on their RunLog; the trend card merges both.
+export function getRecoveryTests(): RecoveryTest[] {
+  return read(RECOVERY_KEY, []);
+}
+export function saveRecoveryTest(t: RecoveryTest) {
+  const all = getRecoveryTests();
+  all.push(t);
+  write(RECOVERY_KEY, all);
 }
 
 
@@ -181,6 +193,7 @@ export function exportAll(): string {
   return JSON.stringify(
     {
       runs: getRuns(),
+      recovery: getRecoveryTests(),
       done: getDone(),
       profile: getProfile(),
       body: getBody(),
@@ -202,6 +215,7 @@ export function importAll(json: string): boolean {
     if (!isRecord(data)) return false;
     if (!isRecord(data.runs) && !isRecord(data.done)) return false;
     if (isRecord(data.runs)) write(RUNS_KEY, data.runs);
+    if (Array.isArray(data.recovery)) write(RECOVERY_KEY, data.recovery);
     if (isRecord(data.done)) write(DONE_KEY, data.done);
     if (isRecord(data.profile)) write(PROFILE_KEY, data.profile);
     if (isRecord(data.body)) write(BODY_KEY, data.body);

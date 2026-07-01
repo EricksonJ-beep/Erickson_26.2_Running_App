@@ -99,6 +99,15 @@ Single page, four bottom tabs (`app/page.tsx`): **Today · Plan · Log · Progre
   Progress tab. Tests GPS (raw accuracy/coords/fix quality), heart-rate strap (reuses
   `useHeartRate`), and screen wake lock (`useWakeLock`), plus a device-capability checklist.
   Nothing is logged — it's a pre-run gear shakeout.
+- **Quick tests** (`components/QuickTestView.tsx`) — fullscreen, strap-paired, launched from the
+  Progress tab (card below Sensor check). Two on-demand tests, no run needed. **Resting HR:** sit/lie
+  still ~2.5 min; ignores a 30 s settle, then tracks the lowest 15 s rolling average (via
+  `useHeartRate.recentSample`) = resting HR, `saveProfile`d to `restingHR` (sharpens Karvonen zones),
+  with a live zone preview. **Recovery (HRR):** the standalone version of the post-run test — get HR
+  up, hit start (captures that as `endHR`), then it hands off to the shared `RecoveryTestView`
+  (`runType` optional when standalone). Result saved to its own store (`saveRecoveryTest`, key
+  `hr_recovery_v1`) and merged into `RecoveryCard`'s trend alongside run-attached ones. Own cue engine
+  mirrors Run Mode / Fitness tests (tone + speech + vibrate, mute toggle).
 - **Daily 100s** (`components/TodayView.tsx`) — pushup/situp counters, goal 100 each per day
   (`CALIS_GOAL`, `CalisLog` in storage). Progress tab shows a streak/totals card (`HundredsCard`).
 - **Coach's guide** (`lib/guide.ts`) — effort anchors on the 1–10 RPE scale, WhistleStop race
@@ -134,9 +143,11 @@ Single page, four bottom tabs (`app/page.tsx`): **Today · Plan · Log · Progre
 ## Data Model (`lib/storage.ts`)
 All in `localStorage`, keys `hr_*_v1`: `RunLog` (incl. optional `route`, `splits`, `hr`,
 `recoveryTest`), `Profile` (age/resting/max/LTHR), `BodyLog`, `CalisLog`, plus `done`
-(non-run completions) and `seeded` (dedupe ledger). `RecoveryTest` (`endHR`, `hrr1`/`hrr2` drops,
-`hrr1Label`, `incomplete`, `lowConfidence`, `runType`) rides on its `RunLog`, so `exportAll`/
-`importAll` and the seed pipeline carry it for free.
+(non-run completions), `seeded` (dedupe ledger), and `recovery` (`hr_recovery_v1` — an array of
+standalone `RecoveryTest`s from Quick tests, not tied to a run). `RecoveryTest` (`endHR`,
+`hrr1`/`hrr2` drops, `hrr1Label`, `incomplete`, `lowConfidence`, optional `runType`) either rides on
+its `RunLog` (post-run) or lives in the `recovery` array (standalone); `exportAll`/`importAll` cover
+both, and the run-attached one also rides the seed pipeline for free.
 
 ## In Progress / Next Up
 - [x] **Jon's first real Run Mode session happened (Jun 19 2026, Little Lake 6-miler).** Surfaced
@@ -180,7 +191,7 @@ erickson-26-2/
     layout.tsx        → fonts, PWA metadata, SW registration
     globals.css       → VOLT palette (dark + html.light)
   components/         → TodayView, PlanView, LogView, ProgressView, RunView,
-                        RecoveryTestView, HRTestView, DiagnosticsView
+                        RecoveryTestView, HRTestView, QuickTestView, DiagnosticsView
   lib/
     plan.ts           → 18-week schedule, dates, paces (edit the plan here)
     zones.ts          → HR zone engine + per-workout hrGuide() targets
