@@ -138,5 +138,14 @@ export const SEED_BODY: SeedBody[] = [
     muscleMass: 148.2,
     visceralFat: 10,
     bmr: 1897
+  },
+  {
+    date: "2026-07-01",
+    weight: 203.0,
+    bmi: 27.8,
+    bodyFat: 23.4,
+    muscleMass: 147.8,
+    visceralFat: 10,
+    bmr: 1893
   }
 ];
