@@ -50,10 +50,11 @@ export default function ProgressView() {
   const totalActual = runs.reduce((a, r) => a + r.miles, 0);
   const totalRuns = runs.length;
   const totalMinutes = runs.reduce((a, r) => a + (r.minutes || 0), 0);
-  const totalHours = Math.floor(totalMinutes / 60);
-  const remMin = totalMinutes % 60;
+  const displayMin = Math.round(totalMinutes); // whole minutes for a clean readout
+  const totalHours = Math.floor(displayMin / 60);
+  const remMin = displayMin % 60;
   const totalTimeStr = totalMinutes > 0
-    ? (totalHours > 0 ? `${totalHours}h ${remMin}m` : `${totalMinutes}m`)
+    ? (totalHours > 0 ? `${totalHours}h ${remMin}m` : `${displayMin}m`)
     : "—";
   const avgPace = totalActual > 0 && totalMinutes > 0
     ? paceOf(totalActual, totalMinutes)
