@@ -6,14 +6,12 @@ import { applySeed } from "@/lib/storage";
 import TodayView from "@/components/TodayView";
 import PlanView from "@/components/PlanView";
 import LogView from "@/components/LogView";
-import FuelView from "@/components/FuelView";
 import ProgressView from "@/components/ProgressView";
 
 const TABS = [
   { id: "today", label: "Today" },
   { id: "plan", label: "Plan" },
   { id: "log", label: "Log" },
-  { id: "fuel", label: "Fuel" },
   { id: "progress", label: "Progress" }
 ] as const;
 
@@ -77,12 +75,11 @@ export default function Home() {
         {tab === "today" && <TodayView key={day} onGoLog={() => setTab("log")} />}
         {tab === "plan" && <PlanView key={day} />}
         {tab === "log" && <LogView key={day} />}
-        {tab === "fuel" && <FuelView key={day} />}
         {tab === "progress" && <ProgressView key={day} />}
       </main>
 
       <nav className="fixed bottom-0 inset-x-0 bg-coal/95 backdrop-blur border-t border-seam pb-[env(safe-area-inset-bottom)]">
-        <div className="mx-auto max-w-md grid grid-cols-5">
+        <div className="mx-auto max-w-md grid grid-cols-4">
           {TABS.map((t) => (
             <button
               key={t.id}

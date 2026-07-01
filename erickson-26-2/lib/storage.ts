@@ -42,13 +42,6 @@ export interface RunLog {
   recoveryTest?: RecoveryTest; // Run Mode HRR test, if run + saved
 }
 
-export interface FuelLog {
-  date: string;
-  waterOz: number;
-  calories: number;
-  protein: number;
-}
-
 // Jon's physiology numbers — all optional. Zones sharpen as fields fill in
 // (Garmin watch supplies maxHR/restingHR; chest strap unlocks LTHR).
 export interface Profile {
@@ -80,7 +73,6 @@ export const CALIS_GOAL = 100;
 
 const RUNS_KEY = "hr_runs_v1";
 const CALIS_KEY = "hr_calis_v1";
-const FUEL_KEY = "hr_fuel_v1";
 const DONE_KEY = "hr_done_v1"; // workout date -> true (non-run completions: XT, strength)
 const PROFILE_KEY = "hr_profile_v1";
 const BODY_KEY = "hr_body_v1";
@@ -118,14 +110,6 @@ export function deleteRun(date: string) {
   write(RUNS_KEY, all);
 }
 
-export function getFuel(): Record<string, FuelLog> {
-  return read(FUEL_KEY, {});
-}
-export function saveFuel(log: FuelLog) {
-  const all = getFuel();
-  all[log.date] = log;
-  write(FUEL_KEY, all);
-}
 
 export function getDone(): Record<string, boolean> {
   return read(DONE_KEY, {});
@@ -197,7 +181,6 @@ export function exportAll(): string {
   return JSON.stringify(
     {
       runs: getRuns(),
-      fuel: getFuel(),
       done: getDone(),
       profile: getProfile(),
       body: getBody(),
@@ -217,9 +200,8 @@ export function importAll(json: string): boolean {
   try {
     const data = JSON.parse(json);
     if (!isRecord(data)) return false;
-    if (!isRecord(data.runs) && !isRecord(data.fuel) && !isRecord(data.done)) return false;
+    if (!isRecord(data.runs) && !isRecord(data.done)) return false;
     if (isRecord(data.runs)) write(RUNS_KEY, data.runs);
-    if (isRecord(data.fuel)) write(FUEL_KEY, data.fuel);
     if (isRecord(data.done)) write(DONE_KEY, data.done);
     if (isRecord(data.profile)) write(PROFILE_KEY, data.profile);
     if (isRecord(data.body)) write(BODY_KEY, data.body);
