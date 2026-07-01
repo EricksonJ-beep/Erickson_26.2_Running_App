@@ -150,28 +150,33 @@ its `RunLog` (post-run) or lives in the `recovery` array (standalone); `exportAl
 both, and the run-attached one also rides the seed pipeline for free.
 
 ## In Progress / Next Up
-- [x] **Jon's first real Run Mode session happened (Jun 19 2026, Little Lake 6-miler).** Surfaced
-      bugs/requests, all addressed this session: time was wrong (per-fix accumulation dropped
-      backgrounded time → now a wall-clock stopwatch); HR wasn't paired & couldn't relink mid-run
-      (→ re-pair UI + infinite auto-reconnect); lock mode glitched/wouldn't re-lock (→ interval-leak
-      guard) and the button moved to a thumb-reachable FAB; added offline route map, per-workout
-      route notes, and HR-lost/GPS-lost voice cues + louder tones. He ran Polar Flow in parallel
-      (will keep doing so until this app's HR/time prove accurate) — he'll hand over Polar data
-      (avg HR 145, max 172) to seed today's run manually. See `[[project_runmode_v2_punchlist]]`.
-- [ ] **Native shell (Capacitor) is now the main lever.** Two things a browser PWA can't do, both
+- [x] **Session Jul 1 2026 — shipped:** post-run **Heart-Rate Recovery (HRR)** test (auto-launches
+      after a run when the strap's streaming); standalone **Quick tests** under Progress (**Resting
+      HR** → saves to profile; standalone **Recovery/HRR** that joins the trend); **removed the Fuel
+      tab** + calorie/macro/water logging (race-day fueling *playbook* under Plan kept, per Jon);
+      added the **WhistleStop full-marathon course map** PNG + **corrected its elevation** (~510 ft net
+      drop, mid-race descent ≈mi 9–16 — was wrongly "flat / 322 ft"); Time-on-feet rounds to whole
+      minutes; **Jul 4 long run 8→9 mi** (running w/ sister); seeded **Jul 1 body comp** (203.0 lb /
+      23.4% BF, trending down from the Jun 4 baseline); **PWA icon finally live** on Jon's phone —
+      required a full **uninstall→reinstall** (not just "remove from home screen"); his data survived.
+      See `[[ref_pwa_icon_update]]`.
+- [x] **Run Mode v2 punch list** (from the Jun 19 Little Lake 6-miler) is done: wall-clock stopwatch,
+      HR re-pair + infinite auto-reconnect, lock-mode interval-leak fix + thumb FAB, offline route map,
+      route notes, HR/GPS-lost cues. See `[[project_runmode_v2_punchlist]]`.
+- [ ] **Real-hardware shakeout still pending** — the strap-driven tests are all type/build-verified
+      only, never run against the real Polar H10: the post-run **HRR** test, the new **Resting HR**
+      test, and the **standalone Recovery** test (strap pairing, checkpoint capture, resting-low
+      tracking, strap-drop grace). Jon's next run with the strap is the validation.
+- [ ] **Native shell (Capacitor) is the main lever.** Two things a browser PWA can't do, both
       requested: (1) reliable background GPS when the phone is pocketed/screen-off; (2) ducking
-      Spotify during voice cues (no audio focus on web — #7 only made our cues louder). Both live in
-      `docs/PHASE2_BACKGROUND_GPS.md`. Also still possible in-browser if he wants: exempt **interval**
-      days from HR drift alerts if they nag mid-rep (one-liner in `RunView.tsx`).
-- [ ] **Sharpen HR zones with real data.** Zones still use an *estimated* max HR (Tanaka, age 39) —
-      profile holds only `{age:39, maxHR:181}` (Jon set Tanaka explicitly; identical to the fallback,
-      so zones are unchanged). **Now built:** Progress → Fitness tests runs guided strap-paired max-HR
-      and LTHR (Friel 30-min TT) field tests that write the real numbers. Awaiting Jon's first test on
-      real hardware; until then his easy runs read high (avg ~135 = top of est. Z2). LTHR is the bigger
-      accuracy win — push him toward that test.
-- [ ] **Jon is off-grid June 20–27, 2026** (Canada canoe trip). No app updates / no run logging that
-      week; wk 3 mileage will be down by design (portaging = cross-train, no intervals, long run held
-      to Sat Jun 27). Expect a seeding gap, not missed workouts.
+      Spotify during voice cues (no audio focus on web). Both live in `docs/PHASE2_BACKGROUND_GPS.md`.
+      Also still possible in-browser: exempt **interval** days from HR drift alerts if they nag
+      mid-rep (one-liner in `RunView.tsx`).
+- [ ] **Sharpen HR zones with real data.** Zones still use an *estimated* max HR (Tanaka, age 39);
+      profile holds only `{age:39, maxHR:181}`. Built and waiting on Jon: Progress → **Fitness tests**
+      (guided max-HR + Friel 30-min LTHR TT) write the real numbers, and Progress → **Quick tests**
+      captures a real **resting HR**. Until he runs them, easy runs read high (avg ~135 = top of est.
+      Z2). LTHR is the biggest accuracy win — push him toward that test.
 
 ## Known Issues
 - Web Bluetooth HR is Chrome/Android only — iOS/Safari report unsupported and stay inert.
