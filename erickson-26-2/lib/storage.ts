@@ -1,5 +1,6 @@
 "use client";
 
+import type { WorkoutType } from "./plan";
 import { SEED_BODY, SEED_RUNS } from "./seed";
 
 // All data lives in localStorage on Jon's phone.
@@ -12,6 +13,23 @@ export interface RoutePoint {
   t: number;
 }
 
+// Heart Rate Recovery test — captured right after a run ends (Run Mode only,
+// and only when the strap was streaming). HRR = how fast HR drops post-stop; a
+// fitter/less-taxed heart downshifts faster. Drops are bpm below the end-of-run
+// HR at each checkpoint. See lib/recovery.ts for the HRR1 interpretation bands.
+export type HRR1Label = "excellent" | "good" | "fair" | "poor";
+
+export interface RecoveryTest {
+  endHR: number; // rolling-avg HR at the moment STOP was pressed
+  hrr1: number | null; // bpm drop at 1:00 (null if the checkpoint was missed)
+  hrr2: number | null; // bpm drop at 2:00
+  hrr1Label: HRR1Label | null; // score band for HRR1
+  incomplete: boolean; // strap dropped / test ended before both checkpoints
+  lowConfidence: boolean; // a captured reading was noisy (wide spread)
+  completedAt: string; // ISO timestamp
+  runType?: WorkoutType; // auto-tagged from the workout, for trend filtering
+}
+
 export interface RunLog {
   date: string;
   miles: number;
@@ -21,6 +39,7 @@ export interface RunLog {
   notes: string;
   route?: RoutePoint[]; // Run Mode GPS trace, downsampled
   splits?: number[]; // per-mile seconds, Run Mode
+  recoveryTest?: RecoveryTest; // Run Mode HRR test, if run + saved
 }
 
 export interface FuelLog {

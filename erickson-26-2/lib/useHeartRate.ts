@@ -64,6 +64,7 @@ export function useHeartRate() {
   const weightedSumRef = useRef(0); // Σ bpm·dt for time-weighted average
   const weightSecRef = useRef(0);
   const lastSampleRef = useRef(0);
+  const recentRef = useRef<{ t: number; hr: number }[]>([]); // short rolling window (HRR capture)
   const reconnectsRef = useRef(0);
   const reconnectingRef = useRef(false); // a retry loop is in flight
   const closedRef = useRef(false);
@@ -90,12 +91,30 @@ export function useHeartRate() {
       lastSampleRef.current = now;
       weightedSumRef.current += hr * dt;
       weightSecRef.current += dt;
+      // Keep a short rolling window for HRR capture (last ~15 s), so a checkpoint
+      // reads a smoothed value instead of one spiky instantaneous sample.
+      const buf = recentRef.current;
+      buf.push({ t: now, hr });
+      const cutoff = now - 15_000;
+      while (buf.length && buf[0].t < cutoff) buf.shift();
       const z = zoneOf(hr);
       if (z !== null) zoneSecondsRef.current[z] += dt;
       setBpm(hr);
     },
     [zoneOf]
   );
+
+  // Rolling-average HR over the last `windowSec` seconds, plus spread (max−min)
+  // so callers can flag a noisy capture. Returns null if no fresh samples —
+  // e.g. the strap dropped — which the HRR test treats as a missed checkpoint.
+  const recentSample = useCallback((windowSec = 5) => {
+    const cutoff = Date.now() - windowSec * 1000;
+    const xs = recentRef.current.filter((s) => s.t >= cutoff).map((s) => s.hr);
+    if (xs.length === 0) return null;
+    const avg = Math.round(xs.reduce((a, b) => a + b, 0) / xs.length);
+    const spread = Math.max(...xs) - Math.min(...xs);
+    return { avg, spread, count: xs.length };
+  }, []);
 
   const subscribe = useCallback(
     async (device: BTDevice) => {
@@ -217,6 +236,7 @@ export function useHeartRate() {
     deviceName,
     zone: bpm !== null ? zoneOf(bpm) : null, // 0-indexed: 0 → Z1
     zoneSeconds: zoneSecondsRef.current,
+    recentSample, // rolling-avg over the last N seconds (HRR capture)
     connect, // full (re-)pair via the chooser
     reconnect, // one-tap retry of the known strap, no chooser
     disconnect

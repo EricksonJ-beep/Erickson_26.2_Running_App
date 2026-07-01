@@ -7,6 +7,7 @@ import {
   CALIS_GOAL, CalisLog, exportAll, getBody, getCalis, getDone, getProfile, getRuns,
   importAll, paceOf, saveProfile, Profile
 } from "@/lib/storage";
+import { hrr1BandInfo, HRR1_LOW_FLAG } from "@/lib/recovery";
 import DiagnosticsView from "@/components/DiagnosticsView";
 import HRTestView from "@/components/HRTestView";
 
@@ -216,6 +217,9 @@ export default function ProgressView() {
           ))}
         </div>
       </div>
+
+      {/* HR recovery — HRR trend from Run Mode recovery tests */}
+      <RecoveryCard />
 
       {/* Fitness tests — measure real max HR / LTHR with the strap */}
       <div className="bg-coal rounded-2xl border border-seam p-5">
@@ -468,6 +472,110 @@ function fmtShortDate(iso: string): string {
     month: "short",
     day: "numeric"
   });
+}
+
+// HRR trend — every saved run that carries a completed recovery test (HRR1).
+function RecoveryCard() {
+  const tests = Object.values(getRuns())
+    .filter((r) => r.recoveryTest && r.recoveryTest.hrr1 != null)
+    .sort((a, b) => (a.date < b.date ? -1 : 1)) // oldest → newest
+    .map((r) => ({ date: r.date, t: r.recoveryTest! }));
+  if (tests.length === 0) return null;
+
+  const drops = tests.map((x) => Math.max(0, x.t.hrr1!));
+  const latest = tests[tests.length - 1];
+  const latestDrop = Math.max(0, latest.t.hrr1!);
+  const best = Math.max(...drops);
+  const last5 = drops.slice(-5);
+  const rollingAvg = Math.round(last5.reduce((a, b) => a + b, 0) / last5.length);
+  const scale = Math.max(best, 40); // fixed-ish reference so bars read intuitively
+  const latestBand = latest.t.hrr1Label ? hrr1BandInfo(latest.t.hrr1Label) : null;
+  const lowFlag = latestDrop < HRR1_LOW_FLAG;
+
+  return (
+    <div className="bg-coal rounded-2xl border border-seam p-5">
+      <h2 className="font-display font-bold text-xl text-bone">HR recovery</h2>
+      <p className="text-[11px] text-dust mt-0.5 leading-snug">
+        One-minute HR drop after each run (HRR1). Bigger drop = faster recovery.
+      </p>
+
+      <div className="grid grid-cols-3 gap-3 mt-3">
+        <div className="bg-ink rounded-lg px-3 py-2.5">
+          <div className={`font-display font-bold text-2xl tabular-nums leading-none ${latestBand?.text ?? "text-gold"}`}>
+            −{latestDrop}
+          </div>
+          <div className="text-[10px] text-dust mt-1">Latest{latestBand ? ` · ${latestBand.name}` : ""}</div>
+        </div>
+        <div className="bg-ink rounded-lg px-3 py-2.5">
+          <div className="font-display font-bold text-2xl text-bone tabular-nums leading-none">−{rollingAvg}</div>
+          <div className="text-[10px] text-dust mt-1">Avg last {last5.length}</div>
+        </div>
+        <div className="bg-ink rounded-lg px-3 py-2.5">
+          <div className="font-display font-bold text-2xl text-bone tabular-nums leading-none">−{best}</div>
+          <div className="text-[10px] text-dust mt-1">Best</div>
+        </div>
+      </div>
+
+      {/* Bar sparkline — one bar per test, colored by band */}
+      <div className="mt-4 flex items-end gap-[3px] h-24">
+        {tests.map((x) => {
+          const d = Math.max(0, x.t.hrr1!);
+          const band = x.t.hrr1Label ? hrr1BandInfo(x.t.hrr1Label) : null;
+          return (
+            <div
+              key={x.date}
+              className="flex-1 flex flex-col justify-end h-full"
+              title={`${fmtShortDate(x.date)}: −${d} bpm${x.t.runType ? ` · ${x.t.runType}` : ""}`}
+            >
+              <div
+                className={`w-full rounded-t ${band?.bar ?? "bg-dust"}`}
+                style={{ height: `${Math.max(4, (d / scale) * 100)}%` }}
+              />
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex justify-between text-[10px] text-dust mt-1.5">
+        <span>{fmtShortDate(tests[0].date)}</span>
+        <span>{tests.length} test{tests.length === 1 ? "" : "s"}</span>
+        <span>{fmtShortDate(latest.date)}</span>
+      </div>
+
+      {/* Recent tests */}
+      <div className="mt-3 space-y-1">
+        {tests
+          .slice(-6)
+          .reverse()
+          .map((x) => {
+            const band = x.t.hrr1Label ? hrr1BandInfo(x.t.hrr1Label) : null;
+            return (
+              <div key={x.date} className="flex items-center gap-2 text-sm bg-ink rounded-lg px-3 py-1.5">
+                <span className="text-xs text-dust w-12 shrink-0">{fmtShortDate(x.date)}</span>
+                <span className={`font-display font-semibold tabular-nums w-12 ${band?.text ?? "text-bone"}`}>
+                  −{Math.max(0, x.t.hrr1!)}
+                </span>
+                {x.t.hrr2 != null && (
+                  <span className="text-xs text-dust tabular-nums">−{Math.max(0, x.t.hrr2)} @2m</span>
+                )}
+                {x.t.runType && (
+                  <span className="text-[10px] uppercase tracking-widest text-dust ml-auto">{x.t.runType}</span>
+                )}
+                {x.t.incomplete && <span className="text-[10px] text-ember">partial</span>}
+              </div>
+            );
+          })}
+      </div>
+
+      {lowFlag && (
+        <div className="bg-ember/15 border border-ember/40 rounded-xl px-4 py-3 mt-3">
+          <p className="text-xs text-bone/90 leading-relaxed">
+            Latest one-minute drop is under 12 bpm — the body may still be carrying fatigue.
+            Consider more easy / recovery days. (General guidance, not medical advice.)
+          </p>
+        </div>
+      )}
+    </div>
+  );
 }
 
 const PROFILE_RANGES: Record<keyof Profile, [number, number]> = {

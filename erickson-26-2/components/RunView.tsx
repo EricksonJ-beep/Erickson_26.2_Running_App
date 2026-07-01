@@ -11,8 +11,10 @@ import { hrBand, hrGuide, HRBandKey, computeZones } from "@/lib/zones";
 import { useGps, GpsResult } from "@/lib/useGps";
 import { useHeartRate } from "@/lib/useHeartRate";
 import { useWakeLock } from "@/lib/useWakeLock";
-import { getProfile, saveRun } from "@/lib/storage";
+import { getProfile, saveRun, RecoveryTest } from "@/lib/storage";
+import { hrr1BandInfo } from "@/lib/recovery";
 import RouteMap from "./RouteMap";
+import RecoveryTestView from "./RecoveryTestView";
 
 const TYPE_PACE_KEY: Partial<Record<WorkoutType, HRBandKey>> = {
   easy: "easy", long: "long", tempo: "tempo", intervals: "intervals", race: "halfRace"
@@ -72,7 +74,7 @@ export default function RunView({
   workout: Workout;
   onClose: (saved: boolean) => void;
 }) {
-  const [phase, setPhase] = useState<"countdown" | "live" | "summary">("countdown");
+  const [phase, setPhase] = useState<"countdown" | "live" | "recovery" | "summary">("countdown");
   const [count, setCount] = useState(COUNTDOWN_SEC); // 5→1, then 0 = GO
   const [locked, setLocked] = useState(false);
   const [voiceOn, setVoiceOn] = useState(true);
@@ -100,6 +102,9 @@ export default function RunView({
     zoneSeconds: [0, 0, 0, 0, 0]
   });
   const [rpe, setRpe] = useState(5);
+  // HRR recovery test: end-of-run HR handed to the test, and its saved result.
+  const [recoveryEndHR, setRecoveryEndHR] = useState<number | null>(null);
+  const [recoveryResult, setRecoveryResult] = useState<RecoveryTest | null>(null);
 
   useEffect(() => {
     wake.acquire();
@@ -354,8 +359,6 @@ export default function RunView({
     const r = gps.finish();
     setResult(r);
     setFinalHr({ avg: hr.avgBpm, zoneSeconds: [...hr.zoneSeconds] });
-    hr.disconnect();
-    wake.release();
     // Default RPE: dominant HR zone if we have a minute of data, else by type
     const total = hr.zoneSeconds.reduce((a, b) => a + b, 0);
     if (total >= 60) {
@@ -364,9 +367,20 @@ export default function RunView({
     } else {
       setRpe(TYPE_RPE_FALLBACK[workout.type] ?? 5);
     }
-    setPhase("summary");
+    // HRR test gate: only if the strap is streaming a fresh reading at STOP.
+    // If so, keep HR + wake lock alive and run the 2-min recovery test first;
+    // otherwise skip straight to the summary and tear the strap down.
+    const endSample = hr.recentSample(5);
+    if (endSample) {
+      setRecoveryEndHR(endSample.avg);
+      setPhase("recovery");
+    } else {
+      hr.disconnect();
+      wake.release();
+      setPhase("summary");
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gps.finish, hr.avgBpm, hr.zoneSeconds, hr.disconnect, wake.release, workout.type]);
+  }, [gps.finish, hr.avgBpm, hr.zoneSeconds, hr.recentSample, hr.disconnect, wake.release, workout.type]);
 
   const startHold = useCallback(() => {
     if (holdTimerRef.current !== null) return; // guard: a second pointerdown would leak an interval
@@ -474,9 +488,34 @@ export default function RunView({
       ...(finalHr.avg !== null ? { hr: finalHr.avg } : {}),
       notes: noteParts.join(" · "),
       route: result.route,
-      splits: result.splits
+      splits: result.splits,
+      ...(recoveryResult ? { recoveryTest: recoveryResult } : {})
     });
     onClose(true);
+  }
+
+  // ── HRR recovery test ── fires right after STOP when the strap was streaming.
+  // HR + wake lock stay live through it; onDone/onSkip tear them down and move on.
+  if (phase === "recovery" && recoveryEndHR != null) {
+    return (
+      <RecoveryTestView
+        endHR={recoveryEndHR}
+        hr={hr}
+        runType={workout.type}
+        cue={cue}
+        onDone={(test) => {
+          setRecoveryResult(test);
+          hr.disconnect();
+          wake.release();
+          setPhase("summary");
+        }}
+        onSkip={() => {
+          hr.disconnect();
+          wake.release();
+          setPhase("summary");
+        }}
+      />
+    );
   }
 
   // ── Summary screen ──
@@ -509,6 +548,35 @@ export default function RunView({
               </div>
             ))}
           </div>
+
+          {recoveryResult && recoveryResult.hrr1 != null && (
+            <div className="bg-coal rounded-xl border border-seam px-4 py-3 mt-3">
+              <div className="flex items-center justify-between">
+                <div className="text-[10px] uppercase tracking-widest text-dust font-display font-semibold">
+                  HR recovery · 1 min
+                </div>
+                <span
+                  className={`text-[10px] uppercase tracking-widest font-display font-bold ${
+                    recoveryResult.hrr1Label ? hrr1BandInfo(recoveryResult.hrr1Label).text : "text-bone"
+                  }`}
+                >
+                  {recoveryResult.hrr1Label ? hrr1BandInfo(recoveryResult.hrr1Label).name : ""}
+                </span>
+              </div>
+              <div className="flex items-baseline gap-2 mt-0.5">
+                <span
+                  className={`font-display font-bold text-3xl tabular-nums ${
+                    recoveryResult.hrr1Label ? hrr1BandInfo(recoveryResult.hrr1Label).text : "text-bone"
+                  }`}
+                >
+                  −{Math.max(0, recoveryResult.hrr1)} bpm
+                </span>
+                {recoveryResult.hrr2 != null && (
+                  <span className="text-xs text-dust">· −{Math.max(0, recoveryResult.hrr2)} at 2 min</span>
+                )}
+              </div>
+            </div>
+          )}
 
           {result.route.length > 1 && (
             <div className="bg-coal rounded-xl border border-seam p-3 mt-3">
