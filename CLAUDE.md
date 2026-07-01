@@ -105,8 +105,12 @@ Single page, four bottom tabs (`app/page.tsx`): **Today · Plan · Log · Progre
   intel, setback/roadblock playbook. Surfaced in Plan/Today/Log. `RaceIntel.courseMaps` embeds
   course images (in `public/`) at the top of an intel card — Chippewa Falls 13.1 shows the official
   Pure Water Days/YMCA route map + the elevation profile (`public/half-route-map.png`,
-  `half-elevation.png`); tap to open full-res, SW runtime-caches them for offline course recon.
-  Rendered by `RouteMapImage` in `PlanView` (each hides itself if its asset is missing).
+  `half-elevation.png`); Ashland 26.2 shows the official WhistleStop course + elevation + aid-station
+  map (`public/full-route-map.png`). Tap to open full-res, SW runtime-caches them for offline course
+  recon. Rendered by `RouteMapImage` in `PlanView` (each hides itself if its asset is missing, so the
+  intel wiring can ship before the PNG is dropped in). **Marathon elevation was corrected from the
+  official full-marathon map:** ~510 ft net drop (start 1,150 ft → finish 640 ft), concentrated as a
+  mid-race descent ≈mi 9–16 — not the earlier "flat, 322 ft" read; takeaways updated to match.
 - **Fueling & hydration playbook** (`FUELING_GUIDE` in `lib/guide.ts`) — evidence-based fuel/hydration
   reference under Plan → Coach's guide, as collapsible cards rendered by `FuelGuideBody` in `PlanView`.
   Tuned for ~95 kg (targets scale w/ weight, flagged via `FUEL_NOTE`). Covers: two-tank glycogen/fat

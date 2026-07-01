@@ -75,19 +75,23 @@ export const RACE_INTEL: RaceIntel[] = [
   },
   {
     title: "Race intel · Ashland 26.2",
-    race: "WhistleStop Marathon · Ashland, WI",
+    race: "WhistleStop Marathon · Iron River → Ashland, WI · 8:30 am start",
     facts: [
-      { label: "Surface", value: "Unpaved rail trail", note: "packed crushed gravel" },
-      { label: "Profile", value: "Flat, gradual decline", note: "322 ft net drop to the finish" },
-      { label: "Typical temp", value: "47°F, cloudy", note: "historical average" },
-      { label: "Humidity / wind", value: "High · gentle", note: "~79% · ~8 mph" },
-      { label: "Altitude", value: "Sea level", note: "671 ft" }
+      { label: "Surface", value: "Unpaved rail trail", note: "packed crushed gravel · Tri-County Corridor" },
+      { label: "Profile", value: "Flat, then a mid-race drop", note: "first ~9 mi high & level, descends ~mi 9–16" },
+      { label: "Net drop", value: "~510 ft", note: "start 1,150 ft → finish 640 ft (official map)" },
+      { label: "Aid stations", value: "15 + finish", note: "food at ~half · first at mi 2.5, then ~every 2–3 mi" },
+      { label: "Typical temp", value: "47°F, cloudy", note: "historical average · ~79% humidity, ~8 mph wind" }
     ],
     takeaways: [
-      "Run some long runs on crushed gravel or rail trail — soft surface changes your footstrike and rhythm.",
-      "You'll train through Wisconsin summer and race at 47°F. Cool race day is free speed; don't let it pull you out too fast.",
-      "A net downhill still pounds the quads late. The strength days are course prep, not extra credit.",
-      "Flat course, even-effort pacing — no hills to budget for. The 9:50–10:00 early miles plan holds."
+      "The drop isn't spread evenly. The first ~9 miles ride high and nearly flat, then the course falls ~500 ft between roughly miles 9 and 16. Don't bank time on the flat opening — the free speed is in that middle descent.",
+      "That mid-race descent hammers quads. Short, quick steps — don't overstride or brake. Practice downhill running; the strength days are course prep, not extra credit.",
+      "Aid stations sit roughly every 2–3 miles (first at mile 2.5) with food at about half — enough to run your fuel/fluid schedule off them, but still carry your own tested gels.",
+      "Crushed-gravel rail trail: train some long runs on soft surface so footstrike and rhythm feel familiar.",
+      "Cool 47°F race day is free speed — hold the 9:50–10:00 early miles even though it'll feel easy."
+    ],
+    courseMaps: [
+      { src: "/full-route-map.png", caption: "WhistleStop full course + elevation & aid stations — tap to zoom" }
     ]
   }
 ];
