@@ -8,6 +8,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import type { Profile } from "./storage";
+import { FULL_DATE, type WorkoutType } from "./plan";
 
 export interface Zone {
   z: string;
@@ -88,6 +89,18 @@ export interface HRGuide {
 }
 
 export type HRBandKey = "easy" | "long" | "tempo" | "intervals" | "halfRace" | "marathon";
+
+// Map a workout to its HR/pace band key — the one place the marathon-race
+// special case lives, so a run type is never half-wired across components.
+// Types with no key (rest/xt/strength/walk/free) get no target band.
+const TYPE_BAND_KEY: Partial<Record<WorkoutType, HRBandKey>> = {
+  easy: "easy", long: "long", tempo: "tempo", intervals: "intervals", race: "halfRace"
+};
+
+export function bandKeyFor(type: WorkoutType, date: string): HRBandKey | undefined {
+  if (type === "race" && date === FULL_DATE) return "marathon";
+  return TYPE_BAND_KEY[type];
+}
 
 // Numeric target window per workout type — the single source the string
 // guide and Run Mode's live judgment both build from.

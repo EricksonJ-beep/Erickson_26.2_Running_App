@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { todayISO, workoutOn } from "@/lib/plan";
 import { TYPE_EFFORT } from "@/lib/guide";
-import { addRun, deleteRun, getRuns, paceOf, runKey, RunLog, saveRun } from "@/lib/storage";
+import { addRun, deleteRun, getRuns, nextRunId, paceOf, runKey, runsOn, RunLog, saveRun } from "@/lib/storage";
 import RouteMap from "./RouteMap";
 
 export default function LogView() {
@@ -53,19 +53,18 @@ export default function LogView() {
     if (scroll) window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  // Picking a date that already has a run switches to editing it,
-  // so saving never silently overwrites an old entry.
   function changeDate(d: string) {
     setDate(d);
     if (!d) return;
-    const existing = getRuns()[d];
+    // While editing, changing the date just moves this run to the new day —
+    // submit() re-keys it there. Don't hijack another day's run or clear edits.
+    if (editMode) return;
+    // Not editing: landing on a day that already has a run loads it to edit,
+    // so saving never silently overwrites an old entry.
+    const existing = runsOn(d)[0];
     if (existing) {
       loadRun(existing, false);
       return;
-    }
-    if (editMode) {
-      clearForm();
-      setEditKey(null);
     }
     const planned = workoutOn(d);
     setMiles(planned?.miles ? String(planned.miles) : "");
@@ -103,12 +102,25 @@ export default function LogView() {
       hr: h > 0 ? h : undefined,
       notes: notes.trim()
     };
+    let ok: boolean;
     if (editKey) {
       // Preserve Run-Mode extras (route/splits/recoveryTest) not shown in the form.
       const existing = getRuns()[editKey];
-      saveRun({ ...existing, ...fields, id: editKey });
+      const oldDate = existing?.date ?? editKey.split("#")[0];
+      if (date !== oldDate) {
+        // Date was edited: write to a free slot on the new day first, then drop
+        // the old key — so a failed write can't lose the run.
+        ok = saveRun({ ...existing, ...fields, id: nextRunId(date) });
+        if (ok) deleteRun(editKey);
+      } else {
+        ok = saveRun({ ...existing, ...fields, id: editKey });
+      }
     } else {
-      addRun(fields); // always a free slot — never overwrites a same-day run
+      ok = addRun(fields) !== null; // always a free slot — never overwrites a same-day run
+    }
+    if (!ok) {
+      window.alert("Couldn't save — this phone's storage may be full. Free up space and try again.");
+      return; // keep the form so nothing is lost
     }
     setSaved(true);
     clearForm();
@@ -119,7 +131,7 @@ export default function LogView() {
     setTimeout(() => setSaved(false), 2000);
   }
 
-  const hasRunOnDate = !!runs[date];
+  const hasRunOnDate = runsOn(date).length > 0;
 
   const livePace = paceOf(parseFloat(miles) || 0, parseFloat(minutes) || 0);
 
@@ -317,7 +329,12 @@ export default function LogView() {
                         Edit
                       </button>
                       <button
-                        onClick={() => { deleteRun(key); force((n) => n + 1); }}
+                        onClick={() => {
+                          if (window.confirm(`Delete this run — ${fmt(r.date)}, ${r.miles} mi? This can't be undone.`)) {
+                            deleteRun(key);
+                            force((n) => n + 1);
+                          }
+                        }}
                         className="text-ember/70 text-xs px-2 py-1 border border-ember/30 rounded"
                       >
                         Del

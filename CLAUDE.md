@@ -171,6 +171,27 @@ another run" (won't overwrite; a hint says so); history rows key/edit/delete by 
 `[[project_multi_run_per_day]]`.
 
 ## In Progress / Next Up
+- [x] **Session Jul 2 2026 — shipped (3): Fable 5 review hardening pass (High + Medium).** A read-only
+      Fable 5 agent reviewed the codebase; built out items #1–13:
+      **Data safety —** `write()` now returns success and `saveRun`/`addRun` propagate it; Run Mode keeps
+      the summary up with a "Retry save" on a failed write instead of the old silent "Saved ✓" data loss
+      (#1). `runsOn(date)`/run-date `Set`s replace bare `runs[date]` lookups in Today/Plan/Progress/Log so
+      extra (`date#2`) runs aren't invisible (#2). Delete/Discard now `confirm()` (#3).
+      `requestPersistence()` (navigator.storage.persist) on startup so Chrome won't evict data (#4).
+      Saved GPS routes capped at 600 points in `useGps.finish()` (#5). Editing a run's **date** now
+      re-keys it (save-new-then-delete-old) instead of duplicating (#6). Seed rev 2+ spread-merges so a
+      chat time-fix can't wipe phone-captured route/splits/HRR (#10). Backup-staleness ember nudge +
+      storage-usage line on Progress, `hr_lastExport_v1` stamped on export (#13).
+      **Robustness —** HR `useHeartRate` reconnect now uses a **generation counter** so a mid-run Re-pair
+      can't get its new device permanently blocked by a stale reconnect loop (#7).
+      **Structure —** the tone/speak/vibrate cue engine is extracted to **`lib/useCues.ts`** (was
+      copy-pasted in RunView/HRTestView/QuickTestView; RunView passes loud 0.9/0.55 gains, the tests
+      quiet 0.28/0.16) (#8); the marathon-vs-half band special-case is unified in **`bandKeyFor()`** in
+      `zones.ts`, used by RunView/TodayView/PlanView (#9); `getRuns()` is **memoized** (module cache,
+      invalidated on write) (#12). SW: manifest/icons/course-maps are now **stale-while-revalidate**
+      (cache `erickson-v7`) so swapping an asset no longer needs a reinstall (#11). Build + tsc clean.
+      Low-priority items #14–19 (HRR-checkpoint timing, UTC date edges, tighter WorkoutType maps, a11y,
+      altitude capture, zone-seconds persistence → 80/20 meter) were **not** done — candidates for later.
 - [x] **Session Jul 2 2026 — shipped (2):** **free run.** Always-visible **▶ Free run** button on Today
       launches Run Mode off-plan any day (rest/XT included) — full GPS/HR/split tracking, no pace target
       ("run by feel"). New `type: "free"` + `freeRunWorkout()`; saves via `addRun` (rides the multi-run

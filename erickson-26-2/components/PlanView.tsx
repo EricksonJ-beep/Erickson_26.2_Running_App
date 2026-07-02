@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FULL_DATE, PLAN, findWeek, todayISO, Workout } from "@/lib/plan";
+import { PLAN, findWeek, todayISO, Workout } from "@/lib/plan";
 import { EFFORT_GUIDE, RACE_INTEL, ROADBLOCKS, FUELING_GUIDE, FUEL_NOTE, FuelGuide } from "@/lib/guide";
-import { hrGuide, HRBandKey } from "@/lib/zones";
+import { hrGuide, bandKeyFor } from "@/lib/zones";
 import { getDone, getProfile, getRuns } from "@/lib/storage";
 
 const TYPE_DOT: Record<string, string> = {
@@ -17,15 +17,10 @@ const TYPE_DOT: Record<string, string> = {
   walk: "bg-dust"
 };
 
-const TYPE_HR_KEY: Record<string, HRBandKey | undefined> = {
-  easy: "easy", long: "long", tempo: "tempo", intervals: "intervals", race: "halfRace"
-};
-
 // Target HR window for a run, from the live zone engine. Non-run days
 // (strength, XT, walk, rest) have no band, so no target is shown.
 function hrTargetFor(x: Workout, guide: ReturnType<typeof hrGuide>): string | null {
-  const key: HRBandKey | undefined =
-    x.type === "race" && x.date === FULL_DATE ? "marathon" : TYPE_HR_KEY[x.type];
+  const key = bandKeyFor(x.type, x.date);
   return key ? guide[key].target : null;
 }
 
@@ -46,8 +41,9 @@ export default function PlanView() {
   }, []);
   if (!today) return null;
 
-  const runs = getRuns();
   const done = getDone();
+  // A date is "run" if any run (primary or an extra like a free run) falls on it.
+  const runDates = new Set(Object.values(getRuns()).map((r) => r.date));
   const guide = hrGuide(getProfile());
   const currentWeekObj = findWeek(today);
   const currentWeekNum = currentWeekObj?.num;
@@ -100,7 +96,7 @@ export default function PlanView() {
         const isPast = weekEndISO(w.start) < today;
         const required = w.workouts.filter((x) => !x.optional);
         const doneCount = required.filter(
-          (x) => runs[x.date] || done[x.date]
+          (x) => runDates.has(x.date) || done[x.date]
         ).length;
         const isComplete = isPast && doneCount === required.length && required.length > 0;
 
@@ -157,7 +153,7 @@ export default function PlanView() {
                     <DayRow
                       key={x.date}
                       x={x}
-                      logged={!!(runs[x.date] || done[x.date])}
+                      logged={runDates.has(x.date) || !!done[x.date]}
                       isToday={x.date === today}
                       hrTarget={hrTargetFor(x, guide)}
                     />

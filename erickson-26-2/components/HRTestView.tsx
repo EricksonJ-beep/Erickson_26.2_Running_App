@@ -26,6 +26,7 @@ import { computeZones, methodLabel } from "@/lib/zones";
 import { getProfile, saveProfile } from "@/lib/storage";
 import { useHeartRate } from "@/lib/useHeartRate";
 import { useWakeLock } from "@/lib/useWakeLock";
+import { useCues } from "@/lib/useCues";
 
 type TestId = "maxhr" | "lthr";
 type Phase = "intro" | "running" | "result";
@@ -91,54 +92,8 @@ export default function HRTestView({ onClose, onSaved }: { onClose: () => void; 
   const winSecRef = useRef(0);
   const lastSampleTsRef = useRef(0);
 
-  // ── Cue engine (tone + vibrate + speech), mirrors Run Mode's feel ──
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const ensureAudio = useCallback(() => {
-    if (typeof window === "undefined") return null;
-    try {
-      const Ctx = window.AudioContext ??
-        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-      if (!audioCtxRef.current && Ctx) audioCtxRef.current = new Ctx();
-      if (audioCtxRef.current?.state === "suspended") audioCtxRef.current.resume().catch(() => {});
-      return audioCtxRef.current;
-    } catch { return null; }
-  }, []);
-  const tone = useCallback((variant: "info" | "alert") => {
-    const ctx = ensureAudio();
-    if (!ctx) return;
-    try {
-      const freqs = variant === "alert" ? [880, 1175, 880] : [620, 830];
-      const dur = 0.11, gap = 0.06, peakG = variant === "alert" ? 0.28 : 0.16;
-      freqs.forEach((f, i) => {
-        const osc = ctx.createOscillator();
-        const g = ctx.createGain();
-        osc.type = "sine";
-        osc.frequency.value = f;
-        const t0 = ctx.currentTime + i * (dur + gap);
-        g.gain.setValueAtTime(0.0001, t0);
-        g.gain.exponentialRampToValueAtTime(peakG, t0 + 0.02);
-        g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-        osc.connect(g).connect(ctx.destination);
-        osc.start(t0);
-        osc.stop(t0 + dur + 0.02);
-      });
-    } catch { /* best-effort */ }
-  }, [ensureAudio]);
-  const cue = useCallback((text: string, variant: "info" | "alert" = "info") => {
-    if (mutedRef.current) return;
-    tone(variant);
-    try { navigator.vibrate?.(variant === "alert" ? [110, 60, 110] : 45); } catch { /* ignore */ }
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      window.setTimeout(() => {
-        try { window.speechSynthesis.speak(new SpeechSynthesisUtterance(text)); } catch { /* ignore */ }
-      }, 240);
-    }
-  }, [tone]);
-
-  useEffect(() => () => {
-    audioCtxRef.current?.close().catch(() => {});
-    try { window.speechSynthesis?.cancel(); } catch { /* ignore */ }
-  }, []);
+  // ── Audio cues — shared engine, quieter than Run Mode (indoor/track tests) ──
+  const { ensureAudio, cue } = useCues(mutedRef, { alertGain: 0.28, infoGain: 0.16, speechRate: 1 });
 
   // ── Sample HR while running: track peak + accumulate the LTHR window ──
   useEffect(() => {

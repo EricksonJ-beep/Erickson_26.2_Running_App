@@ -83,6 +83,8 @@ const PROFILE_KEY = "hr_profile_v1";
 const BODY_KEY = "hr_body_v1";
 const SEEDED_KEY = "hr_seeded_v1"; // seed entries already merged (date#rev -> true)
 
+const EXPORT_KEY = "hr_lastExport_v1"; // ISO timestamp of the last JSON export
+
 function read<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
   try {
@@ -93,16 +95,36 @@ function read<T>(key: string, fallback: T): T {
   }
 }
 
-function write(key: string, value: unknown) {
+// Returns whether the write actually landed. localStorage can throw (quota
+// exceeded, private-mode quirks) — callers that persist irreplaceable data
+// (a finished run) MUST check this instead of assuming success.
+function write(key: string, value: unknown): boolean {
   try {
     window.localStorage.setItem(key, JSON.stringify(value));
+    if (key === RUNS_KEY) runsCache = value as Record<string, RunLog>;
+    return true;
   } catch {
-    // storage full or unavailable — fail quietly
+    if (key === RUNS_KEY) runsCache = null; // drop the (now inconsistent) cache
+    return false;
   }
 }
 
+// getRuns() is called several times per render across views; parsing the whole
+// store each time gets costly as GPS route blobs pile up. Cache the parsed map
+// and invalidate on any write to RUNS_KEY (handled in write()).
+let runsCache: Record<string, RunLog> | null = null;
+
 export function getRuns(): Record<string, RunLog> {
-  return read(RUNS_KEY, {});
+  if (runsCache) return runsCache;
+  runsCache = read(RUNS_KEY, {});
+  return runsCache;
+}
+
+// Every run recorded on a given date. The store keys the day's primary run by
+// bare date and extras by `date#2`/`#3`, so a plain `runs[date]` lookup misses
+// the extras — use this for "did anything happen on this date" and per-day lists.
+export function runsOn(date: string): RunLog[] {
+  return Object.values(getRuns()).filter((r) => r.date === date);
 }
 
 // The effective storage key for a run: its explicit id, else its date (legacy).
@@ -122,23 +144,23 @@ export function nextRunId(date: string, skip?: string): string {
   }
 }
 
-export function saveRun(log: RunLog) {
-  const all = getRuns();
-  all[runKey(log)] = log;
-  write(RUNS_KEY, all);
+// Returns false if the write failed (storage full/unavailable) — the caller
+// still holds the run and must not report success or discard it.
+export function saveRun(log: RunLog): boolean {
+  const all = { ...getRuns(), [runKey(log)]: log };
+  return write(RUNS_KEY, all);
 }
 
 // Save a brand-new run, always in a free slot so it can never overwrite an
-// existing same-day run. Returns the run with its assigned id.
-export function addRun(log: RunLog): RunLog {
+// existing same-day run. Returns the stored run, or null if the write failed.
+export function addRun(log: RunLog): RunLog | null {
   const id = nextRunId(log.date);
   const stored: RunLog = { ...log, id };
-  saveRun(stored);
-  return stored;
+  return saveRun(stored) ? stored : null;
 }
 
 export function deleteRun(key: string) {
-  const all = getRuns();
+  const all = { ...getRuns() };
   delete all[key];
   write(RUNS_KEY, all);
 }
@@ -207,7 +229,9 @@ export function applySeed() {
       const key = `${prefix}${item.date}#${rev ?? 1}`;
       if (seen[key]) continue;
       if (!all[item.date] || (rev ?? 1) > 1) {
-        all[item.date] = item as T;
+        // Spread-merge so a rev 2+ correction (e.g. a chat-supplied time fix)
+        // keeps any phone-captured extras — route/splits/HRR — it didn't include.
+        all[item.date] = { ...all[item.date], ...item } as T;
         changed = true;
       }
       seen[key] = true;
@@ -222,7 +246,7 @@ export function applySeed() {
 }
 
 export function exportAll(): string {
-  return JSON.stringify(
+  const json = JSON.stringify(
     {
       runs: getRuns(),
       recovery: getRecoveryTests(),
@@ -235,6 +259,39 @@ export function exportAll(): string {
     null,
     2
   );
+  write(EXPORT_KEY, new Date().toISOString()); // stamp the backup so we can nudge on staleness
+  return json;
+}
+
+// ISO timestamp of the last export, or null if never backed up. Progress uses
+// this to warn when the only recovery path for this backend-less app is stale.
+export function getLastExport(): string | null {
+  return read<string | null>(EXPORT_KEY, null);
+}
+
+// Persistent storage: ask the browser not to evict our localStorage under
+// pressure. Installed PWAs are auto-granted on Android (no prompt). Best-effort.
+export async function requestPersistence(): Promise<void> {
+  try {
+    if (typeof navigator === "undefined") return;
+    const s = navigator.storage;
+    if (s?.persist && s.persisted && !(await s.persisted())) await s.persist();
+  } catch {
+    // storage manager unavailable — ignore
+  }
+}
+
+// Rough localStorage footprint, for the Backup card. Best-effort; returns null
+// where the Storage Manager API is missing (e.g. older Safari).
+export async function storageEstimate(): Promise<{ usage: number; quota: number } | null> {
+  try {
+    if (typeof navigator === "undefined" || !navigator.storage?.estimate) return null;
+    const { usage, quota } = await navigator.storage.estimate();
+    if (usage == null || quota == null) return null;
+    return { usage, quota };
+  } catch {
+    return null;
+  }
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {

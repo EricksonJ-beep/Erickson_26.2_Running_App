@@ -66,7 +66,12 @@ export function useHeartRate() {
   const lastSampleRef = useRef(0);
   const recentRef = useRef<{ t: number; hr: number }[]>([]); // short rolling window (HRR capture)
   const reconnectsRef = useRef(0);
-  const reconnectingRef = useRef(false); // a retry loop is in flight
+  // Each fresh (re-)pair bumps genRef; a running retry loop belongs to the
+  // generation in reconnectGenRef (0 = none). When connect() bumps the
+  // generation, any stale loop exits and — critically — its guard no longer
+  // blocks the NEW device's auto-reconnect (the "strap lost → Re-pair" case).
+  const genRef = useRef(0);
+  const reconnectGenRef = useRef(0);
   const closedRef = useRef(false);
 
   const zoneOf = useCallback((hr: number): number | null => {
@@ -136,24 +141,30 @@ export function useHeartRate() {
   // Strap dropped: keep retrying the known device with backoff for the whole
   // run (the last delay repeats). One loop at a time, guarded by reconnectingRef.
   const handleDisconnect = useCallback(async () => {
-    if (closedRef.current || reconnectingRef.current) return;
-    reconnectingRef.current = true;
+    if (closedRef.current) return;
+    const gen = genRef.current;
+    if (reconnectGenRef.current === gen) return; // a loop for this generation is already running
+    reconnectGenRef.current = gen;
     setStatus("lost");
     setBpm(null);
     const device = deviceRef.current;
-    while (device && !closedRef.current) {
+    while (device && !closedRef.current && genRef.current === gen) {
       const delay = RECONNECT_DELAYS_MS[Math.min(reconnectsRef.current, RECONNECT_DELAYS_MS.length - 1)];
       reconnectsRef.current++;
       await new Promise((r) => setTimeout(r, delay));
-      if (closedRef.current) break;
+      if (closedRef.current || genRef.current !== gen) break;
       try {
         await subscribe(device); // resets the backoff on success
+        if (genRef.current !== gen) { // re-paired to a new device mid-attempt — drop this stale one
+          try { device.gatt?.disconnect(); } catch { /* ignore */ }
+          break;
+        }
         break;
       } catch {
         // strap still out of range — keep backing off and retrying
       }
     }
-    reconnectingRef.current = false;
+    if (reconnectGenRef.current === gen) reconnectGenRef.current = 0; // release only if still ours
   }, [subscribe]);
 
   // Full (re-)pair: opens the device chooser. Must run inside a user gesture
@@ -173,6 +184,7 @@ export function useHeartRate() {
     charRef.current = null;
     closedRef.current = false; // revive the reconnect machinery
     reconnectsRef.current = 0;
+    genRef.current++; // new generation — abandon any stale reconnect loop from the old device
     try {
       setStatus("connecting");
       const bt = (navigator as Navigator & { bluetooth: BTApi }).bluetooth;

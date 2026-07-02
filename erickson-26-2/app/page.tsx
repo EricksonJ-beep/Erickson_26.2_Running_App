@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { todayISO } from "@/lib/plan";
-import { applySeed } from "@/lib/storage";
+import { applySeed, requestPersistence } from "@/lib/storage";
 import TodayView from "@/components/TodayView";
 import PlanView from "@/components/PlanView";
 import LogView from "@/components/LogView";
@@ -38,6 +38,7 @@ export default function Home() {
   const [day, setDay] = useState("");
   useEffect(() => {
     applySeed(); // fold in any runs Jon reported via chat
+    requestPersistence(); // ask the browser not to evict our localStorage — no backend to fall back on
     setDay(todayISO());
     const refresh = () => setDay(todayISO());
     window.addEventListener("focus", refresh);

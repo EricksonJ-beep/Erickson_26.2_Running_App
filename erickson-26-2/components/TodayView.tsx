@@ -5,17 +5,13 @@ import {
   HALF_DATE, FULL_DATE, PACES, PACE_NOTES,
   daysUntil, findWeek, freeRunWorkout, nextWorkout, todayISO, workoutOn, Workout
 } from "@/lib/plan";
-import { hrGuide } from "@/lib/zones";
+import { hrGuide, bandKeyFor } from "@/lib/zones";
 import { TYPE_EFFORT } from "@/lib/guide";
 import RunView from "@/components/RunView";
 import { quoteForDate } from "@/lib/quotes";
 import {
-  addCalis, CALIS_GOAL, getCalis, getDone, getProfile, getRuns, paceOf, toggleDone
+  addCalis, CALIS_GOAL, getCalis, getDone, getProfile, getRuns, runsOn, paceOf, toggleDone
 } from "@/lib/storage";
-
-const TYPE_PACE: Record<string, keyof typeof PACES | null> = {
-  easy: "easy", long: "long", tempo: "tempo", intervals: "intervals", race: "halfRace"
-};
 
 export default function TodayView({ onGoLog }: { onGoLog: () => void }) {
   const [today, setToday] = useState("");
@@ -27,19 +23,20 @@ export default function TodayView({ onGoLog }: { onGoLog: () => void }) {
   const week = findWeek(today);
   const workout = workoutOn(today);
   const upNext = nextWorkout(today);
-  const runs = getRuns();
   const done = getDone();
-  const loggedRun = workout ? runs[workout.date] : null;
-  const logged = workout && (runs[workout.date] || done[workout.date]);
+  // Any run on the date counts (a day can now hold multiple, incl. a free run);
+  // show the first for stats, and mark the day logged if any run OR a manual done.
+  const todaysRuns = workout ? runsOn(workout.date) : [];
+  const loggedRun = todaysRuns[0] ?? null;
+  const logged = workout && (todaysRuns.length > 0 || done[workout.date]);
 
   const toHalf = daysUntil(HALF_DATE, today);
   const toFull = daysUntil(FULL_DATE, today);
 
   const isRest = !workout;
   const guide = hrGuide(getProfile());
-  const paceKey = workout ? TYPE_PACE[workout.type] : null;
+  const paceKey = workout ? bandKeyFor(workout.type, workout.date) : undefined;
   const isRace = workout?.type === "race";
-  const racePace = isRace && workout.date === FULL_DATE ? PACES.marathon : PACES.halfRace;
 
   return (
     <div className="space-y-4">
@@ -167,7 +164,7 @@ export default function TodayView({ onGoLog }: { onGoLog: () => void }) {
                         Target pace
                       </span>
                       <span className="font-display font-bold text-xl text-gold tabular-nums">
-                        {isRace ? racePace : PACES[paceKey]}
+                        {PACES[paceKey]}
                       </span>
                     </div>
                     <p className="text-xs text-dust mt-1">{PACE_NOTES[paceKey]}</p>
@@ -188,9 +185,7 @@ export default function TodayView({ onGoLog }: { onGoLog: () => void }) {
                         Target HR
                       </span>
                       <span className="font-display font-bold text-xl text-bone tabular-nums">
-                        {isRace && workout.date === FULL_DATE
-                          ? guide.marathon.target
-                          : guide[paceKey].target}
+                        {guide[paceKey].target}
                       </span>
                     </div>
                     <p className="text-xs text-dust mt-1">{guide[paceKey].note}</p>

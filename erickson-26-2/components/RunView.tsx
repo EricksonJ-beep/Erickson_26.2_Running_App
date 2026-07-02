@@ -5,20 +5,17 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  FULL_DATE, PACES, PACE_BANDS, todayISO, Workout, WorkoutType
+  PACES, PACE_BANDS, todayISO, Workout, WorkoutType
 } from "@/lib/plan";
-import { hrBand, hrGuide, HRBandKey, computeZones } from "@/lib/zones";
+import { hrBand, hrGuide, computeZones, bandKeyFor } from "@/lib/zones";
 import { useGps, GpsResult } from "@/lib/useGps";
 import { useHeartRate } from "@/lib/useHeartRate";
 import { useWakeLock } from "@/lib/useWakeLock";
+import { useCues } from "@/lib/useCues";
 import { getProfile, addRun, RecoveryTest } from "@/lib/storage";
 import { hrr1BandInfo } from "@/lib/recovery";
 import RouteMap from "./RouteMap";
 import RecoveryTestView from "./RecoveryTestView";
-
-const TYPE_PACE_KEY: Partial<Record<WorkoutType, HRBandKey>> = {
-  easy: "easy", long: "long", tempo: "tempo", intervals: "intervals", race: "halfRace"
-};
 
 // Fallback RPE by workout type when no HR data exists for the run.
 const TYPE_RPE_FALLBACK: Partial<Record<WorkoutType, number>> = {
@@ -80,11 +77,11 @@ export default function RunView({
   const [voiceOn, setVoiceOn] = useState(true);
   const voiceOnRef = useRef(true);
   voiceOnRef.current = voiceOn;
+  const mutedRef = useRef(false); // useCues silences when true
+  mutedRef.current = !voiceOn;
 
   const profile = getProfile();
-  const isRace = workout.type === "race";
-  const paceKey: HRBandKey | undefined =
-    isRace && workout.date === FULL_DATE ? "marathon" : TYPE_PACE_KEY[workout.type];
+  const paceKey = bandKeyFor(workout.type, workout.date); // undefined for a free run → no target
   const judge = workout.type !== "intervals"; // HR lags, reps are short — coach by feel
   const paceBand = paceKey ? PACE_BANDS[paceKey] : null;
   const heartBand = paceKey ? hrBand(profile, paceKey) : null;
@@ -105,6 +102,7 @@ export default function RunView({
   // HRR recovery test: end-of-run HR handed to the test, and its saved result.
   const [recoveryEndHR, setRecoveryEndHR] = useState<number | null>(null);
   const [recoveryResult, setRecoveryResult] = useState<RecoveryTest | null>(null);
+  const [saveError, setSaveError] = useState(false); // localStorage write failed — don't lose the run
 
   useEffect(() => {
     wake.acquire();
@@ -112,93 +110,14 @@ export default function RunView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Web Speech (raw TTS). Best-effort; muting stops it via voiceOnRef.
-  const speak = useCallback((text: string) => {
-    if (!voiceOnRef.current) return;
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    try {
-      const u = new SpeechSynthesisUtterance(text);
-      u.volume = 1; // max — can't exceed system volume, but never quieter
-      u.rate = 0.98; // a hair slower reads clearer over wind/music
-      window.speechSynthesis.speak(u);
-    } catch {
-      // speech is best-effort
-    }
-  }, []);
-
-  // Attention tones (WebAudio) so cues cut through music. The Start-run tap
-  // is the user gesture that lets the context start; we resume defensively.
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const ensureAudio = useCallback(() => {
-    if (typeof window === "undefined") return null;
-    try {
-      const Ctx =
-        window.AudioContext ??
-        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-      if (!audioCtxRef.current && Ctx) audioCtxRef.current = new Ctx();
-      if (audioCtxRef.current?.state === "suspended") audioCtxRef.current.resume().catch(() => {});
-      return audioCtxRef.current;
-    } catch {
-      return null;
-    }
-  }, []);
-
-  const tone = useCallback(
-    (variant: "info" | "alert") => {
-      const ctx = ensureAudio();
-      if (!ctx) return;
-      try {
-        const freqs = variant === "alert" ? [880, 1175, 880] : [620, 830];
-        const dur = 0.11;
-        const gap = 0.06;
-        // Loud enough to cut through music the app can't duck in a browser.
-        const peak = variant === "alert" ? 0.9 : 0.55;
-        freqs.forEach((f, i) => {
-          const osc = ctx.createOscillator();
-          const g = ctx.createGain();
-          osc.type = "sine";
-          osc.frequency.value = f;
-          const t0 = ctx.currentTime + i * (dur + gap);
-          g.gain.setValueAtTime(0.0001, t0);
-          g.gain.exponentialRampToValueAtTime(peak, t0 + 0.02);
-          g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-          osc.connect(g).connect(ctx.destination);
-          osc.start(t0);
-          osc.stop(t0 + dur + 0.02);
-        });
-      } catch {
-        // audio is best-effort
-      }
-    },
-    [ensureAudio]
-  );
-
-  // A cue = attention tone + buzz, then the spoken line a beat later so the
-  // tone lands first. "alert" reads more urgent than routine "info" updates.
-  const cue = useCallback(
-    (text: string, variant: "info" | "alert" = "info") => {
-      if (!voiceOnRef.current) return;
-      tone(variant);
-      try {
-        navigator.vibrate?.(variant === "alert" ? [110, 60, 110] : 45);
-      } catch {
-        // vibration unsupported (iOS) — ignore
-      }
-      window.setTimeout(() => speak(text), 240);
-    },
-    [tone, speak]
-  );
-
-  useEffect(() => {
-    return () => {
-      audioCtxRef.current?.close().catch(() => {});
-      try {
-        window.speechSynthesis?.cancel();
-      } catch {
-        // ignore
-      }
-    };
-  }, []);
+  // Loud cues (alert/info gain 0.9/0.55, speech at full volume) so they punch
+  // through music outdoors — a browser PWA can't duck Spotify. Shared engine.
+  const { ensureAudio, tone, cue } = useCues(mutedRef, {
+    alertGain: 0.9,
+    infoGain: 0.55,
+    speechVolume: 1,
+    speechRate: 0.98
+  });
 
   // Countdown → GO. Ticks each second with a haptic buzz + tone; at zero we
   // commit the GPS baseline (gps.start) and drop into the live screen. GPS has
@@ -483,7 +402,7 @@ export default function RunView({
       const dominant = finalHr.zoneSeconds.indexOf(Math.max(...finalHr.zoneSeconds));
       noteParts.push(`${Math.round((finalHr.zoneSeconds[dominant] / totalZone) * 100)}% Z${dominant + 1}`);
     }
-    addRun({
+    const stored = addRun({
       date: todayISO(),
       miles: Math.round(result.miles * 100) / 100,
       minutes: Math.round((result.movingSec / 60) * 10) / 10,
@@ -494,6 +413,12 @@ export default function RunView({
       splits: result.splits,
       ...(recoveryResult ? { recoveryTest: recoveryResult } : {})
     });
+    // If the write failed (storage full / private mode), keep the summary up so
+    // the run isn't lost — never report success or close on a failed save.
+    if (!stored) {
+      setSaveError(true);
+      return;
+    }
     onClose(true);
   }
 
@@ -654,14 +579,24 @@ export default function RunView({
           </div>
 
           <div className="mt-auto pt-5">
+            {saveError && (
+              <p className="text-xs text-ember mb-2 leading-snug">
+                Couldn’t save — this phone’s storage may be full. Free up space and tap Save
+                again. Don’t leave this screen: the run isn’t stored yet.
+              </p>
+            )}
             <button
               onClick={save}
               className="w-full bg-gold text-ink font-display font-bold tracking-widest uppercase rounded-xl py-4 text-base min-h-[48px]"
             >
-              Save run
+              {saveError ? "Retry save" : "Save run"}
             </button>
             <button
-              onClick={() => onClose(false)}
+              onClick={() => {
+                if (window.confirm("Discard this run? GPS route, splits, and HR won’t be saved.")) {
+                  onClose(false);
+                }
+              }}
               className="w-full text-dust text-sm py-3 mt-1 min-h-[48px]"
             >
               Discard
@@ -785,7 +720,7 @@ export default function RunView({
             <div className="text-[11px] text-dust mt-0.5">
               {paceKey ? (
                 <>
-                  Target {isRace && workout.date === FULL_DATE ? PACES.marathon : PACES[paceKey]}
+                  Target {PACES[paceKey]}
                   {guide && <> · {guide.target}</>}
                 </>
               ) : (

@@ -31,6 +31,11 @@ const PACE_MIN_WINDOW_M = 20;
 const AUTOPAUSE_SPEED_MS = 0.5;
 const AUTOPAUSE_AFTER_MS = 15_000;
 const ROUTE_SAMPLE_MS = 5_000;
+// Hard cap on saved route points. A 20-miler at 5 s sampling is ~2,400 points
+// (~120 KB); every saveRun re-serializes the whole runs map, so unbounded
+// routes would crowd the ~5 MB localStorage budget right when runs get longest.
+// RouteMap renders into a ~320 px viewbox, so 600 points loses nothing visible.
+const MAX_ROUTE_POINTS = 600;
 const METERS_PER_MILE = 1609.344;
 
 interface Pt {
@@ -304,7 +309,7 @@ export function useGps(active: boolean) {
 
   const finish = useCallback((): GpsResult => {
     const pts = ptsRef.current;
-    const route: RoutePoint[] = [];
+    let route: RoutePoint[] = [];
     let lastT = -Infinity;
     for (const p of pts) {
       if (p.t - lastT < ROUTE_SAMPLE_MS) continue;
@@ -314,6 +319,14 @@ export function useGps(active: boolean) {
         lng: Math.round(p.lng * 1e5) / 1e5,
         t: Math.round((p.t - startRef.current) / 1000)
       });
+    }
+    // Cap the point budget on very long runs — even stride, always keeping the
+    // start and finish so the trace still closes correctly.
+    if (route.length > MAX_ROUTE_POINTS) {
+      const stride = Math.ceil(route.length / MAX_ROUTE_POINTS);
+      const last = route[route.length - 1];
+      route = route.filter((_, i) => i % stride === 0);
+      if (route[route.length - 1] !== last) route.push(last);
     }
     return {
       miles: (pts[pts.length - 1]?.d ?? 0) / METERS_PER_MILE,

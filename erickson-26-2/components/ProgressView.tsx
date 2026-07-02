@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { PLAN, Phase, daysUntil, findWeek, todayISO } from "@/lib/plan";
 import { computeZones, methodLabel } from "@/lib/zones";
 import {
-  CALIS_GOAL, CalisLog, exportAll, getBody, getCalis, getDone, getProfile, getRecoveryTests,
-  getRuns, importAll, paceOf, saveProfile, Profile
+  CALIS_GOAL, CalisLog, exportAll, getBody, getCalis, getDone, getLastExport, getProfile,
+  getRecoveryTests, getRuns, importAll, paceOf, saveProfile, storageEstimate, Profile
 } from "@/lib/storage";
 import { hrr1BandInfo, HRR1_LOW_FLAG } from "@/lib/recovery";
 import DiagnosticsView from "@/components/DiagnosticsView";
@@ -28,7 +28,11 @@ export default function ProgressView() {
   const [hrTest, setHrTest] = useState(false);
   const [quickTest, setQuickTest] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [estimate, setEstimate] = useState<{ usage: number; quota: number } | null>(null);
   useEffect(() => setToday(todayISO()), []);
+  useEffect(() => {
+    storageEstimate().then(setEstimate);
+  }, []);
   if (!today) return null;
 
   const runsMap = getRuns();
@@ -62,11 +66,13 @@ export default function ProgressView() {
     ? paceOf(totalActual, totalMinutes)
     : "—";
 
-  // Compliance: required (non-optional) workouts in the past
+  // Compliance: required (non-optional) workouts in the past. Any run on the
+  // date counts (a day can hold multiple runs), so match on the set of run dates.
+  const runDates = new Set(runs.map((r) => r.date));
   const pastWorkouts = PLAN.flatMap((w) => w.workouts)
     .filter((x) => x.date < today && !x.optional);
   const completedCount = pastWorkouts.filter(
-    (x) => runsMap[x.date] || doneMap[x.date]
+    (x) => runDates.has(x.date) || doneMap[x.date]
   ).length;
   const compliance =
     pastWorkouts.length > 0
@@ -280,6 +286,26 @@ export default function ProgressView() {
         <p className="text-[11px] text-dust mt-0.5">
           Data lives on this phone. Export a JSON copy now and then.
         </p>
+        {(() => {
+          const lastExport = getLastExport();
+          const daysSince = lastExport ? daysUntil(today, lastExport.slice(0, 10)) : null;
+          const stale = totalRuns > 0 && (lastExport == null || (daysSince != null && daysSince >= 21));
+          if (!stale) return null;
+          return (
+            <p className="text-xs text-ember mt-2 leading-snug">
+              {lastExport == null
+                ? "You haven't exported a backup yet. It's the only way to recover this data if the phone or browser clears it."
+                : `Last backup was ${daysSince} days ago. Export a fresh copy.`}
+            </p>
+          );
+        })()}
+        {estimate && estimate.quota > 0 && (
+          <p className="text-[11px] text-dust mt-1.5 tabular-nums">
+            Storage: {(estimate.usage / 1048576).toFixed(1)} MB used
+            {" · "}
+            {Math.round((estimate.usage / estimate.quota) * 100)}% of the browser budget
+          </p>
+        )}
         <div className="flex gap-2 mt-3">
           <button
             onClick={() => {
@@ -290,6 +316,7 @@ export default function ProgressView() {
               a.download = `erickson-262-${today}.json`;
               a.click();
               setTimeout(() => URL.revokeObjectURL(url), 10000);
+              force((n) => n + 1); // refresh the staleness nudge now that we've backed up
             }}
             className="flex-1 bg-gold text-ink font-display font-bold uppercase tracking-wider rounded-lg py-2.5 text-sm"
           >
