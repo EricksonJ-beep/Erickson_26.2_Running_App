@@ -117,7 +117,7 @@ export function hrBand(p: Profile, key: HRBandKey): { lo: number; hi: number } {
 }
 
 // Target windows + coaching notes per workout type, derived from live zones.
-export function hrGuide(p: Profile): Record<string, HRGuide> {
+export function hrGuide(p: Profile): Record<HRBandKey, HRGuide> {
   const band = (k: HRBandKey) => hrBand(p, k);
   const easy = band("easy"), long = band("long"), tempo = band("tempo");
   const intervals = band("intervals"), half = band("halfRace"), mar = band("marathon");

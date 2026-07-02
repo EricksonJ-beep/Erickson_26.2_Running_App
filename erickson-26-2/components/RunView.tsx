@@ -5,7 +5,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  PACES, PACE_BANDS, todayISO, Workout, WorkoutType
+  PACES, PACE_BANDS, Workout, WorkoutType
 } from "@/lib/plan";
 import { hrBand, hrGuide, computeZones, bandKeyFor } from "@/lib/zones";
 import { useGps, GpsResult } from "@/lib/useGps";
@@ -14,7 +14,7 @@ import { useWakeLock } from "@/lib/useWakeLock";
 import { useCues } from "@/lib/useCues";
 import { getProfile, addRun, RecoveryTest } from "@/lib/storage";
 import { hrr1BandInfo } from "@/lib/recovery";
-import RouteMap from "./RouteMap";
+import RouteMap, { elevationStats } from "./RouteMap";
 import RecoveryTestView from "./RecoveryTestView";
 
 // Fallback RPE by workout type when no HR data exists for the run.
@@ -402,15 +402,21 @@ export default function RunView({
       const dominant = finalHr.zoneSeconds.indexOf(Math.max(...finalHr.zoneSeconds));
       noteParts.push(`${Math.round((finalHr.zoneSeconds[dominant] / totalZone) * 100)}% Z${dominant + 1}`);
     }
+    // Key the run to the workout's date, not "now" — a run that starts before
+    // midnight and saves after belongs to the day it was launched for.
     const stored = addRun({
-      date: todayISO(),
+      date: workout.date,
       miles: Math.round(result.miles * 100) / 100,
       minutes: Math.round((result.movingSec / 60) * 10) / 10,
       rpe,
       ...(finalHr.avg !== null ? { hr: finalHr.avg } : {}),
       notes: noteParts.join(" · "),
+      type: workout.type,
       route: result.route,
       splits: result.splits,
+      // Full per-zone seconds (not just the "% Z2" note) so Progress can build
+      // the weekly 80/20 intensity meter from real strap data.
+      ...(totalZone > 0 ? { zoneSeconds: finalHr.zoneSeconds.map((s) => Math.round(s)) } : {}),
       ...(recoveryResult ? { recoveryTest: recoveryResult } : {})
     });
     // If the write failed (storage full / private mode), keep the summary up so
@@ -518,6 +524,17 @@ export default function RunView({
                 </div>
               </div>
               <RouteMap route={result.route} className="rounded-lg" height={200} />
+              {(() => {
+                const elev = elevationStats(result.route);
+                if (!elev) return null;
+                return (
+                  <div className="text-[11px] text-dust tabular-nums mt-2">
+                    Elevation <span className="text-bone/80">↑ {elev.gainFt} ft</span>
+                    {" · "}
+                    <span className="text-bone/80">↓ {elev.lossFt} ft</span>
+                  </div>
+                );
+              })()}
             </div>
           )}
 
@@ -574,6 +591,7 @@ export default function RunView({
               max={10}
               value={rpe}
               onChange={(e) => setRpe(parseInt(e.target.value))}
+              aria-label="Effort, RPE 1 to 10"
               className="w-full mt-1 accent-gold"
             />
           </div>

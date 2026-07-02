@@ -28,11 +28,12 @@ export const metadata: Metadata = {
   icons: { apple: "/apple-touch-icon.png?v=2" }
 };
 
+// No maximumScale: pinch-zoom stays available (a11y). Modern mobile browsers
+// don't need the old scale-lock to prevent double-tap zoom on form inputs.
 export const viewport: Viewport = {
   themeColor: "#0A0B09",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
   viewportFit: "cover"
 };
 

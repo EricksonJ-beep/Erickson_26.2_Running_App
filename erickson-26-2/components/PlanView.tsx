@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PLAN, findWeek, todayISO, Workout } from "@/lib/plan";
+import { PLAN, findWeek, todayISO, Workout, WorkoutType } from "@/lib/plan";
 import { EFFORT_GUIDE, RACE_INTEL, ROADBLOCKS, FUELING_GUIDE, FUEL_NOTE, FuelGuide } from "@/lib/guide";
 import { hrGuide, bandKeyFor } from "@/lib/zones";
 import { getDone, getProfile, getRuns } from "@/lib/storage";
 
-const TYPE_DOT: Record<string, string> = {
+// Partial so adding a WorkoutType forces a conscious choice here (or the
+// bg-dust fallback below); "rest" and "free" intentionally have no dot.
+const TYPE_DOT: Partial<Record<WorkoutType, string>> = {
   easy: "bg-bone/60",
   tempo: "bg-gold",
   intervals: "bg-ember",

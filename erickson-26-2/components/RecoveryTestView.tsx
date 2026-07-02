@@ -94,11 +94,18 @@ export default function RecoveryTestView({
     setPhase("results");
   }, [endHR, runType, clearGrace]);
 
-  // Capture a smoothed HR at a checkpoint; null if the strap has no fresh data.
-  const capture = useCallback((): { drop: number; low: boolean } | null => {
-    const s = hr.recentSample(CAPTURE_WINDOW_SEC);
+  // Capture a smoothed HR at a checkpoint, anchored to the true mark: `lateSec`
+  // is how far past the checkpoint the tick fired, so we read the samples that
+  // straddle 1:00/2:00 even if a throttled timer landed late. If the mark has
+  // slid out of the strap's ~15 s buffer, fall back to "now" but flag it noisy.
+  const capture = useCallback((lateSec: number): { drop: number; low: boolean } | null => {
+    const anchored = hr.sampleAt(Date.now() - lateSec * 1000, CAPTURE_WINDOW_SEC);
+    const s = anchored ?? hr.recentSample(CAPTURE_WINDOW_SEC);
     if (!s) return null;
-    return { drop: endHR - s.avg, low: s.spread > NOISE_SPREAD || s.count < 2 };
+    return {
+      drop: endHR - s.avg,
+      low: s.spread > NOISE_SPREAD || s.count < 2 || !anchored
+    };
   }, [hr, endHR]);
 
   // Announce the test once on mount.
@@ -117,7 +124,7 @@ export default function RecoveryTestView({
 
       if (!hrr1DoneRef.current && el >= CHECKPOINT1_SEC) {
         hrr1DoneRef.current = true;
-        const c = capture();
+        const c = capture(el - CHECKPOINT1_SEC);
         if (c) {
           hrr1Ref.current = c.drop;
           setHrr1(c.drop);
@@ -134,7 +141,7 @@ export default function RecoveryTestView({
 
       if (!hrr2DoneRef.current && el >= CHECKPOINT2_SEC) {
         hrr2DoneRef.current = true;
-        const c = capture();
+        const c = capture(el - CHECKPOINT2_SEC);
         if (c) {
           hrr2Ref.current = c.drop;
           setHrr2(c.drop);

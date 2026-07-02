@@ -41,6 +41,7 @@ const METERS_PER_MILE = 1609.344;
 interface Pt {
   lat: number;
   lng: number;
+  alt: number | null; // meters above sea level, if the device reports it
   t: number; // ms epoch
   d: number; // cumulative meters at this point
 }
@@ -61,7 +62,6 @@ export interface GpsState {
   miles: number;
   currentPaceSec: number | null; // sec per mile over trailing 45 s; null = standing
   avgPaceSec: number | null;
-  elapsedSec: number; // wall clock since GO (ignores pauses)
   movingSec: number; // the run clock: wall clock since GO minus manual-pause time
   splits: number[]; // seconds per completed mile
   paused: boolean; // manual
@@ -73,7 +73,6 @@ export interface GpsState {
 export interface GpsResult {
   miles: number;
   movingSec: number;
-  elapsedSec: number;
   splits: number[];
   route: RoutePoint[];
 }
@@ -84,7 +83,6 @@ export function useGps(active: boolean) {
     miles: 0,
     currentPaceSec: null,
     avgPaceSec: null,
-    elapsedSec: 0,
     movingSec: 0,
     splits: [],
     paused: false,
@@ -110,7 +108,7 @@ export function useGps(active: boolean) {
   const skipSegmentRef = useRef(false); // bridge over a manual pause
   const statusRef = useRef<GpsState["status"]>("acquiring");
   const startedRef = useRef(false); // false during countdown pre-warm
-  const pendingRef = useRef<{ lat: number; lng: number; t: number } | null>(null);
+  const pendingRef = useRef<{ lat: number; lng: number; alt: number | null; t: number } | null>(null);
   const lastAccuracyRef = useRef<number | null>(null);
   const lastFixAtRef = useRef<number | null>(null); // any fix arriving = we have signal
 
@@ -149,7 +147,6 @@ export function useGps(active: boolean) {
       miles,
       currentPaceSec,
       avgPaceSec: miles > 0.05 ? movingSec / miles : null,
-      elapsedSec: startRef.current ? (now - startRef.current) / 1000 : 0,
       movingSec,
       splits: splitsRef.current,
       paused: pausedRef.current,
@@ -169,7 +166,7 @@ export function useGps(active: boolean) {
 
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
-        const { latitude, longitude, accuracy } = pos.coords;
+        const { latitude, longitude, accuracy, altitude } = pos.coords;
         const t = Date.now();
         lastAccuracyRef.current = accuracy;
         lastFixAtRef.current = t; // a fix arrived → signal is alive
@@ -186,7 +183,7 @@ export function useGps(active: boolean) {
         // Pre-warm: GPS is locked but the run hasn't started. Hold the latest
         // good fix as the start baseline; accumulate nothing until start().
         if (!startedRef.current) {
-          pendingRef.current = { lat: latitude, lng: longitude, t };
+          pendingRef.current = { lat: latitude, lng: longitude, alt: altitude, t };
           statusRef.current = "tracking";
           snapshot();
           return;
@@ -196,7 +193,7 @@ export function useGps(active: boolean) {
         const prev = pts[pts.length - 1];
 
         if (!prev) {
-          ptsRef.current.push({ lat: latitude, lng: longitude, t, d: 0 });
+          ptsRef.current.push({ lat: latitude, lng: longitude, alt: altitude, t, d: 0 });
           statusRef.current = "tracking";
           snapshot();
           return;
@@ -223,7 +220,7 @@ export function useGps(active: boolean) {
         }
         if (skipSegmentRef.current) {
           skipSegmentRef.current = false;
-          ptsRef.current.push({ lat: latitude, lng: longitude, t, d: prev.d });
+          ptsRef.current.push({ lat: latitude, lng: longitude, alt: altitude, t, d: prev.d });
           snapshot();
           return;
         }
@@ -239,7 +236,7 @@ export function useGps(active: boolean) {
 
         const prevMiles = prev.d / METERS_PER_MILE;
         const d = prev.d + (autoPausedRef.current ? 0 : stepM);
-        ptsRef.current.push({ lat: latitude, lng: longitude, t, d });
+        ptsRef.current.push({ lat: latitude, lng: longitude, alt: altitude, t, d });
 
         // Mile split crossed? Time per mile is the wall-clock stopwatch delta.
         const newMiles = d / METERS_PER_MILE;
@@ -284,7 +281,7 @@ export function useGps(active: boolean) {
     lowSpeedSinceRef.current = null;
     skipSegmentRef.current = false;
     const p = pendingRef.current;
-    ptsRef.current = p ? [{ lat: p.lat, lng: p.lng, t: Date.now(), d: 0 }] : [];
+    ptsRef.current = p ? [{ lat: p.lat, lng: p.lng, alt: p.alt, t: Date.now(), d: 0 }] : [];
     snapshot();
   }, [snapshot]);
 
@@ -317,7 +314,9 @@ export function useGps(active: boolean) {
       route.push({
         lat: Math.round(p.lat * 1e5) / 1e5,
         lng: Math.round(p.lng * 1e5) / 1e5,
-        t: Math.round((p.t - startRef.current) / 1000)
+        t: Math.round((p.t - startRef.current) / 1000),
+        // Whole meters — GPS altitude wobbles ±several m, finer is noise.
+        ...(p.alt != null ? { alt: Math.round(p.alt) } : {})
       });
     }
     // Cap the point budget on very long runs — even stride, always keeping the
@@ -331,7 +330,6 @@ export function useGps(active: boolean) {
     return {
       miles: (pts[pts.length - 1]?.d ?? 0) / METERS_PER_MILE,
       movingSec: activeMs(Date.now()) / 1000,
-      elapsedSec: startRef.current ? (Date.now() - startRef.current) / 1000 : 0,
       splits: splitsRef.current,
       route
     };

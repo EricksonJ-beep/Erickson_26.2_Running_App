@@ -85,6 +85,7 @@ export default function Home() {
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
+              aria-current={tab === t.id ? "page" : undefined}
               className={`py-3.5 text-sm font-display font-semibold tracking-widest uppercase transition-colors ${
                 tab === t.id ? "text-gold" : "text-dust"
               }`}

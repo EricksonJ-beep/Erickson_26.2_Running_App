@@ -65,7 +65,7 @@ export const PACE_BANDS: Record<keyof typeof PACES, { lo: number; hi: number }> 
 // HR zones + per-workout targets now live in lib/zones.ts,
 // computed from the profile (Settings on the Progress tab).
 
-export const PACE_NOTES: Record<string, string> = {
+export const PACE_NOTES: Record<keyof typeof PACES, string> = {
   easy: "Conversational. Full sentences out loud. If in doubt, slower.",
   long: "Relaxed and steady. Builds the aerobic engine — 80% of the work lives here.",
   tempo: "Comfortably hard. Short phrases only. This is lactate-threshold training.",
@@ -285,19 +285,6 @@ export function daysUntil(targetISO: string, fromISO: string): number {
   const b = new Date(targetISO + "T12:00:00").getTime();
   return Math.round((b - a) / 86400000);
 }
-
-export const TYPE_LABEL: Record<WorkoutType, string> = {
-  rest: "Rest",
-  easy: "Easy run",
-  tempo: "Tempo",
-  intervals: "Intervals",
-  long: "Long run",
-  xt: "Cross-train",
-  strength: "Strength",
-  race: "Race day",
-  walk: "Walk",
-  free: "Free run"
-};
 
 // Synthetic workout for an ad-hoc "free run" launched from Today. Carries no
 // pace/HR target, so Run Mode tracks everything (GPS/HR/splits) without coaching

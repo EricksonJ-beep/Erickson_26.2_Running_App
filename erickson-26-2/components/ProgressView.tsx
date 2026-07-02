@@ -205,6 +205,9 @@ export default function ProgressView() {
         </div>
       </div>
 
+      {/* 80/20 intensity balance — time in zone from strap runs */}
+      <IntensityCard today={today} />
+
       {/* The daily 100s — pushups & situps habit */}
       <HundredsCard today={today} />
 
@@ -345,6 +348,73 @@ export default function ProgressView() {
           />
         </div>
       </div>
+    </div>
+  );
+}
+
+// 80/20 intensity balance — the principle the whole plan is built on. Sums
+// per-run time-in-zone (saved by Run Mode when the strap streamed) over the
+// last 4 weeks: Z1–Z2 = easy, Z3+ = hard. Hidden until there's enough data.
+function IntensityCard({ today }: { today: string }) {
+  const runs = Object.values(getRuns()).filter((r) => {
+    if (!r.zoneSeconds) return false;
+    const age = daysUntil(today, r.date);
+    return age >= 0 && age < 28;
+  });
+  let easySec = 0;
+  let hardSec = 0;
+  for (const r of runs) {
+    const z = r.zoneSeconds!;
+    easySec += (z[0] ?? 0) + (z[1] ?? 0);
+    hardSec += (z[2] ?? 0) + (z[3] ?? 0) + (z[4] ?? 0);
+  }
+  const total = easySec + hardSec;
+  if (total < 600) return null; // need ~10 min of strap time before the % means anything
+
+  const easyPct = Math.round((easySec / total) * 100);
+  const onTarget = easyPct >= 80;
+  const hours = total / 3600;
+
+  return (
+    <div className="bg-coal rounded-2xl border border-seam p-5">
+      <h2 className="font-display font-bold text-xl text-bone">80/20 balance</h2>
+      <p className="text-[11px] text-dust mt-0.5 leading-snug">
+        Time in Z1–Z2 (easy) vs Z3+ (hard) across strap runs, last 4 weeks. The plan is built
+        on ~80% easy.
+      </p>
+
+      <div className="flex items-baseline gap-2 mt-3">
+        <span
+          className={`font-display font-bold text-3xl tabular-nums leading-none ${
+            onTarget ? "text-sage" : "text-ember"
+          }`}
+        >
+          {easyPct}%
+        </span>
+        <span className="text-xs text-dust">
+          easy · {100 - easyPct}% hard · {runs.length} run{runs.length === 1 ? "" : "s"},{" "}
+          {hours >= 1 ? `${hours.toFixed(1)} h` : `${Math.round(total / 60)} min`}
+        </span>
+      </div>
+
+      {/* Meter with the 80% target tick */}
+      <div className="relative mt-3 h-3 rounded-full overflow-hidden bg-ink flex">
+        <div className={onTarget ? "bg-sage" : "bg-gold"} style={{ width: `${easyPct}%` }} />
+        <div className="bg-ember/70 flex-1" />
+        <div className="absolute inset-y-0 left-[80%] w-px bg-bone/70" />
+      </div>
+      <div className="flex justify-between text-[10px] text-dust mt-1">
+        <span>easy</span>
+        <span className="text-bone/70">80% target</span>
+        <span>hard</span>
+      </div>
+
+      {!onTarget && (
+        <p className="text-xs text-ember mt-2.5 leading-snug">
+          Under 80% — the easy days may be running too hot. Slowing them down protects the
+          quality days (and the 10% ramp).
+        </p>
+      )}
     </div>
   );
 }
@@ -522,6 +592,13 @@ function fmtShortDate(iso: string): string {
   });
 }
 
+// completedAt is a UTC ISO timestamp; slicing it would date an evening test
+// under tomorrow. Convert to the local calendar day, same basis as todayISO().
+function localDateOf(ts: string): string {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 // HRR trend — run-attached recovery tests + standalone ones from Quick tests.
 function RecoveryCard() {
   const runTests = Object.values(getRuns())
@@ -529,7 +606,7 @@ function RecoveryCard() {
     .map((r) => ({ date: r.date, t: r.recoveryTest! }));
   const soloTests = getRecoveryTests()
     .filter((t) => t.hrr1 != null)
-    .map((t) => ({ date: t.completedAt.slice(0, 10), t }));
+    .map((t) => ({ date: localDateOf(t.completedAt), t }));
   const tests = [...runTests, ...soloTests].sort((a, b) =>
     a.t.completedAt < b.t.completedAt ? -1 : 1
   ); // oldest → newest

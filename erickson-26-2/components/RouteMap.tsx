@@ -10,6 +10,34 @@
 
 import { RoutePoint } from "@/lib/storage";
 
+// Total climb/descent over a saved route, in feet. GPS altitude wobbles by a
+// few meters fix-to-fix, so raw deltas would inflate badly — only moves of
+// ≥3 m from the last accepted reference count (simple hysteresis). Null when
+// the route carries no altitude (pre-Jul-2026 runs, or a device that omits it).
+export function elevationStats(
+  route: RoutePoint[] | undefined
+): { gainFt: number; lossFt: number } | null {
+  if (!route) return null;
+  const alts = route.map((p) => p.alt).filter((a): a is number => a != null);
+  if (alts.length < 2) return null;
+  const THRESH_M = 3;
+  let gain = 0;
+  let loss = 0;
+  let ref = alts[0];
+  for (const a of alts) {
+    const d = a - ref;
+    if (d >= THRESH_M) {
+      gain += d;
+      ref = a;
+    } else if (d <= -THRESH_M) {
+      loss -= d;
+      ref = a;
+    }
+  }
+  const FT_PER_M = 3.28084;
+  return { gainFt: Math.round(gain * FT_PER_M), lossFt: Math.round(loss * FT_PER_M) };
+}
+
 export default function RouteMap({
   route,
   height = 190,

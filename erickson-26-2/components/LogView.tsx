@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { todayISO, workoutOn } from "@/lib/plan";
 import { TYPE_EFFORT } from "@/lib/guide";
 import { addRun, deleteRun, getRuns, nextRunId, paceOf, runKey, runsOn, RunLog, saveRun } from "@/lib/storage";
-import RouteMap from "./RouteMap";
+import RouteMap, { elevationStats } from "./RouteMap";
 
 export default function LogView() {
   const [date, setDate] = useState("");
@@ -344,6 +344,17 @@ export default function LogView() {
                   {hasRoute && mapOpen && (
                     <div className="mt-2.5">
                       <RouteMap route={r.route} className="rounded-lg" height={170} />
+                      {(() => {
+                        const elev = elevationStats(r.route);
+                        if (!elev) return null;
+                        return (
+                          <div className="text-[11px] text-dust tabular-nums mt-2">
+                            Elevation <span className="text-bone/80">↑ {elev.gainFt} ft</span>
+                            {" · "}
+                            <span className="text-bone/80">↓ {elev.lossFt} ft</span>
+                          </div>
+                        );
+                      })()}
                       {r.splits && r.splits.length > 0 && (
                         <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
                           {r.splits.map((s, i) => (

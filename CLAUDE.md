@@ -143,15 +143,19 @@ Single page, four bottom tabs (`app/page.tsx`): **Today · Plan · Log · Progre
 - **Chat-to-app seed pipeline** (`lib/seed.ts` + `applySeed` in `lib/storage.ts`) — Claude folds
   runs/body data Jon reports in chat. rev 1 only fills empty dates (phone data wins); rev 2+ is a
   correction and overwrites. `push = deploy`.
-- **Progress** (`components/ProgressView.tsx`) — trends + JSON **export/import** backup.
+- **Progress** (`components/ProgressView.tsx`) — trends + JSON **export/import** backup. Includes an
+  **80/20 balance** card (`IntensityCard`): time in Z1–Z2 vs Z3+ summed from `RunLog.zoneSeconds`
+  over the last 4 weeks of strap runs, with an 80%-easy target tick; hidden under 10 min of data.
 - **Run route map** (`components/RouteMap.tsx`) — offline SVG trace of a saved GPS route (no tiles,
   no deps); start/finish dots, VOLT colors. On the Run Mode summary, and behind a per-run "Map"
-  toggle in **Log** history (expands trace + per-mile splits). Street-map tiles deferred to native.
+  toggle in **Log** history (expands trace + per-mile splits). Runs since Jul 2026 also capture GPS
+  **altitude** (`RoutePoint.alt`); `elevationStats()` (3 m hysteresis vs GPS wobble) shows ↑/↓ ft on
+  the summary + Log expansion. Street-map tiles deferred to native.
 - **PWA** — `public/manifest.json` + `public/sw.js` service worker, installable, offline.
 
 ## Data Model (`lib/storage.ts`)
-All in `localStorage`, keys `hr_*_v1`: `RunLog` (incl. optional `route`, `splits`, `hr`,
-`recoveryTest`), `Profile` (age/resting/max/LTHR), `BodyLog`, `CalisLog`, plus `done`
+All in `localStorage`, keys `hr_*_v1`: `RunLog` (incl. optional `route`, `splits`, `hr`, `type`,
+`zoneSeconds`, `recoveryTest`), `Profile` (age/resting/max/LTHR), `BodyLog`, `CalisLog`, plus `done`
 (non-run completions), `seeded` (dedupe ledger), and `recovery` (`hr_recovery_v1` — an array of
 standalone `RecoveryTest`s from Quick tests, not tied to a run). `RecoveryTest` (`endHR`,
 `hrr1`/`hrr2` drops, `hrr1Label`, `incomplete`, `lowConfidence`, optional `runType`) either rides on
@@ -171,6 +175,25 @@ another run" (won't overwrite; a hint says so); history rows key/edit/delete by 
 `[[project_multi_run_per_day]]`.
 
 ## In Progress / Next Up
+- [x] **Session Jul 2 2026 — shipped (4): Fable 5 review Low items (#14–19) — backlog cleared.**
+      **#14** HRR checkpoint capture is time-anchored: new `useHeartRate.sampleAt(atMs)` reads the
+      strap samples around the true 1:00/2:00 mark, so a late/throttled timer tick can't skew the
+      reading (falls back to "now" + `lowConfidence` if the mark slid out of the ~15 s buffer).
+      **#15** `RunView.save()` keys the run to `workout.date` instead of `todayISO()` (a run finished
+      past midnight stays on the day it started), and `RecoveryCard` dates standalone tests by
+      **local** day (`localDateOf`) instead of a UTC `slice(0,10)`.
+      **#16** `PACE_NOTES` → `Record<keyof typeof PACES,…>`, `hrGuide()` → `Record<HRBandKey,…>`,
+      `TYPE_DOT` → `Partial<Record<WorkoutType,…>>`; pruned dead `TYPE_LABEL` (plan.ts) and the unused
+      `elapsedSec` from `GpsState`/`GpsResult`.
+      **#17** Pinch-zoom re-enabled (dropped `maximumScale:1`), tab bar buttons get `aria-current`,
+      Run Mode summary RPE slider got an `aria-label`.
+      **#18** GPS **altitude** captured into `RoutePoint.alt` (whole meters, optional — old routes
+      unaffected); `elevationStats()` exported from `RouteMap.tsx` (3 m hysteresis) renders
+      "Elevation ↑/↓ ft" on the Run Mode summary + Log map expansion.
+      **#19** Run Mode persists `type` + `zoneSeconds` on the `RunLog` (rides export/import + seed for
+      free); new **80/20 balance** card on Progress — last 4 weeks of strap runs, Z1–Z2 vs Z3+ with an
+      80% target tick and an "easy days running too hot" nudge. Build + tsc clean.
+      **The Fable 5 review backlog (#1–19) is now fully shipped.**
 - [x] **Session Jul 2 2026 — shipped (3): Fable 5 review hardening pass (High + Medium).** A read-only
       Fable 5 agent reviewed the codebase; built out items #1–13:
       **Data safety —** `write()` now returns success and `saveRun`/`addRun` propagate it; Run Mode keeps
@@ -190,8 +213,7 @@ another run" (won't overwrite; a hint says so); history rows key/edit/delete by 
       `zones.ts`, used by RunView/TodayView/PlanView (#9); `getRuns()` is **memoized** (module cache,
       invalidated on write) (#12). SW: manifest/icons/course-maps are now **stale-while-revalidate**
       (cache `erickson-v7`) so swapping an asset no longer needs a reinstall (#11). Build + tsc clean.
-      Low-priority items #14–19 (HRR-checkpoint timing, UTC date edges, tighter WorkoutType maps, a11y,
-      altitude capture, zone-seconds persistence → 80/20 meter) were **not** done — candidates for later.
+      Low-priority items #14–19 were finished later the same day — see shipped (4) above.
 - [x] **Session Jul 2 2026 — shipped (2):** **free run.** Always-visible **▶ Free run** button on Today
       launches Run Mode off-plan any day (rest/XT included) — full GPS/HR/split tracking, no pace target
       ("run by feel"). New `type: "free"` + `freeRunWorkout()`; saves via `addRun` (rides the multi-run

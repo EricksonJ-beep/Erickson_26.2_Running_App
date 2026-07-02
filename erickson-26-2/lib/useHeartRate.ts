@@ -121,6 +121,22 @@ export function useHeartRate() {
     return { avg, spread, count: xs.length };
   }, []);
 
+  // Like recentSample, but anchored: averages the samples in the `windowSec`
+  // seconds leading up to epoch `atMs` (small forward tolerance for a sample
+  // landing just past the mark). HRR checkpoints use this so a late timer tick
+  // (throttled tab, backgrounded screen) still reads the HR *at* 1:00/2:00,
+  // not whatever it is when the tick finally fires. Limited by the ~15 s ring
+  // buffer — null if the mark has already slid out of the window.
+  const sampleAt = useCallback((atMs: number, windowSec = 5) => {
+    const lo = atMs - windowSec * 1000;
+    const hi = atMs + 1000;
+    const xs = recentRef.current.filter((s) => s.t >= lo && s.t <= hi).map((s) => s.hr);
+    if (xs.length === 0) return null;
+    const avg = Math.round(xs.reduce((a, b) => a + b, 0) / xs.length);
+    const spread = Math.max(...xs) - Math.min(...xs);
+    return { avg, spread, count: xs.length };
+  }, []);
+
   const subscribe = useCallback(
     async (device: BTDevice) => {
       const server = await device.gatt!.connect();
@@ -249,6 +265,7 @@ export function useHeartRate() {
     zone: bpm !== null ? zoneOf(bpm) : null, // 0-indexed: 0 → Z1
     zoneSeconds: zoneSecondsRef.current,
     recentSample, // rolling-avg over the last N seconds (HRR capture)
+    sampleAt, // rolling-avg anchored at a specific instant (HRR checkpoints)
     connect, // full (re-)pair via the chooser
     reconnect, // one-tap retry of the known strap, no chooser
     disconnect

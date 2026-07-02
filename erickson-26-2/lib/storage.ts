@@ -11,6 +11,7 @@ export interface RoutePoint {
   lat: number;
   lng: number;
   t: number;
+  alt?: number; // meters above sea level, whole m; absent if the device didn't report it
 }
 
 // Heart Rate Recovery test — captured right after a run ends (Run Mode only,
@@ -41,8 +42,10 @@ export interface RunLog {
   rpe: number; // 1-10
   hr?: number; // avg heart rate, bpm
   notes: string;
+  type?: WorkoutType; // what the run was launched as (Run Mode); manual logs omit it
   route?: RoutePoint[]; // Run Mode GPS trace, downsampled
   splits?: number[]; // per-mile seconds, Run Mode
+  zoneSeconds?: number[]; // sec in Z1–Z5 from the strap — feeds the 80/20 meter
   recoveryTest?: RecoveryTest; // Run Mode HRR test, if run + saved
 }
 
