@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   HALF_DATE, FULL_DATE, PACES, PACE_NOTES,
-  daysUntil, findWeek, nextWorkout, todayISO, workoutOn, Workout
+  daysUntil, findWeek, freeRunWorkout, nextWorkout, todayISO, workoutOn, Workout
 } from "@/lib/plan";
 import { hrGuide } from "@/lib/zones";
 import { TYPE_EFFORT } from "@/lib/guide";
@@ -19,7 +19,7 @@ const TYPE_PACE: Record<string, keyof typeof PACES | null> = {
 
 export default function TodayView({ onGoLog }: { onGoLog: () => void }) {
   const [today, setToday] = useState("");
-  const [runMode, setRunMode] = useState(false);
+  const [runWorkout, setRunWorkout] = useState<Workout | null>(null); // the workout Run Mode is tracking (planned or free)
   const [, force] = useState(0);
   useEffect(() => setToday(todayISO()), []);
   if (!today) return null;
@@ -43,12 +43,13 @@ export default function TodayView({ onGoLog }: { onGoLog: () => void }) {
 
   return (
     <div className="space-y-4">
-      {/* Run Mode — fullscreen takeover, covers the tab bar */}
-      {runMode && workout && (
+      {/* Run Mode — fullscreen takeover, covers the tab bar. Tracks either the
+          day's planned workout or an ad-hoc free run. */}
+      {runWorkout && (
         <RunView
-          workout={workout}
+          workout={runWorkout}
           onClose={() => {
-            setRunMode(false);
+            setRunWorkout(null);
             force((n) => n + 1);
           }}
         />
@@ -199,7 +200,7 @@ export default function TodayView({ onGoLog }: { onGoLog: () => void }) {
 
               {workout.miles > 0 && (
                 <button
-                  onClick={() => setRunMode(true)}
+                  onClick={() => setRunWorkout(workout)}
                   className="mt-4 w-full bg-gold text-ink font-display font-bold tracking-widest uppercase rounded-lg py-4 text-base min-h-[48px]"
                 >
                   ▶ Start run
@@ -235,6 +236,23 @@ export default function TodayView({ onGoLog }: { onGoLog: () => void }) {
           )}
         </div>
       </div>
+
+      {/* Free run — launch Run Mode any day (even rest/cross-train), no plan
+          workout needed. Full GPS/HR/split tracking, no pace target. */}
+      <button
+        onClick={() => setRunWorkout(freeRunWorkout(today))}
+        className="w-full bg-coal rounded-xl border border-seam active:border-gold/50 px-4 py-3.5 flex items-center justify-between text-left min-h-[48px]"
+      >
+        <div className="min-w-0">
+          <div className="font-display font-bold tracking-widest uppercase text-gold text-sm">
+            ▶ Free run
+          </div>
+          <div className="text-[11px] text-dust mt-0.5">
+            Feeling good? Track any run — GPS, HR, splits. No plan pace.
+          </div>
+        </div>
+        <span className="text-gold text-xl shrink-0 ml-3">→</span>
+      </button>
 
       {/* The daily 100s — pushups & situps */}
       <Hundreds dateISO={today} />

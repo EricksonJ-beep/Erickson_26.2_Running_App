@@ -475,7 +475,10 @@ export default function RunView({
   function save() {
     if (!result) return;
     const totalZone = finalHr.zoneSeconds.reduce((a, b) => a + b, 0);
-    const noteParts = [`Run Mode`, `${result.splits.length} split${result.splits.length === 1 ? "" : "s"}`];
+    const noteParts = [
+      workout.type === "free" ? `Free run` : `Run Mode`,
+      `${result.splits.length} split${result.splits.length === 1 ? "" : "s"}`
+    ];
     if (totalZone >= 60) {
       const dominant = finalHr.zoneSeconds.indexOf(Math.max(...finalHr.zoneSeconds));
       noteParts.push(`${Math.round((finalHr.zoneSeconds[dominant] / totalZone) * 100)}% Z${dominant + 1}`);
@@ -780,10 +783,14 @@ export default function RunView({
               {workout.miles > 0 && <span className="text-dust"> · {workout.miles} mi</span>}
             </div>
             <div className="text-[11px] text-dust mt-0.5">
-              {paceKey && (
-                <>Target {isRace && workout.date === FULL_DATE ? PACES.marathon : PACES[paceKey]}</>
+              {paceKey ? (
+                <>
+                  Target {isRace && workout.date === FULL_DATE ? PACES.marathon : PACES[paceKey]}
+                  {guide && <> · {guide.target}</>}
+                </>
+              ) : (
+                <>No target · run by feel</>
               )}
-              {guide && <> · {guide.target}</>}
             </div>
           </div>
           <button

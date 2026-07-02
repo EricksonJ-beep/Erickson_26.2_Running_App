@@ -47,6 +47,15 @@ Single page, four bottom tabs (`app/page.tsx`): **Today · Plan · Log · Progre
   %LTHR; max+resting → Karvonen; max only → %max (Tanaka age estimate, default age 39).
   `hrGuide()` maps each workout type to a target bpm window + zone; shown per-run on **Today**
   (with pace/effort) and on every run row in the **Plan** tab.
+- **Free run** — Today has an always-visible **▶ Free run** button (below the day's bib card, shows on
+  every day incl. rest/cross-train) that launches Run Mode with a synthetic off-plan workout
+  (`freeRunWorkout()` in `lib/plan.ts`, `type: "free"`). Full GPS/HR/split/route/HRR tracking, but
+  **no pace target** — the cue engine already null-guards the band, so it announces distance/pace/HR
+  every ½ mi without "on pace"/drift nagging (header reads "No target · run by feel"). Saves through the
+  same `addRun` (never overwrites; counts toward weekly mileage; if it's the day's only run it also
+  marks that day done — "a run is a run", Jon's call). Run Mode is now launched via
+  `setRunWorkout(workout | freeRunWorkout(today))` in `TodayView`, not a boolean. See
+  `[[project_free_run]]`.
 - **Run Mode** (`components/RunView.tsx`) — fullscreen live tracker. GPS (`lib/useGps.ts`),
   live heart rate over Web Bluetooth standard HR service (`lib/useHeartRate.ts`, works with
   Polar H10; Chrome/Android only), screen wake lock (`lib/useWakeLock.ts`). Saves run with
@@ -162,11 +171,16 @@ another run" (won't overwrite; a hint says so); history rows key/edit/delete by 
 `[[project_multi_run_per_day]]`.
 
 ## In Progress / Next Up
-- [x] **Session Jul 2 2026 — shipped:** **multiple runs per day.** Logging a second run (manual or Run
-      Mode) used to overwrite the day's first run because the store was keyed by bare date. Now `addRun`
-      keys extra same-day runs `date#2`/`#3` (primary keeps the bare-date key → zero migration, all
-      `runs[date]` lookups + seed/export untouched); Run Mode + Log both add instead of replace; extra
-      runs count toward weekly mileage but not adherence. See `[[project_multi_run_per_day]]`.
+- [x] **Session Jul 2 2026 — shipped (2):** **free run.** Always-visible **▶ Free run** button on Today
+      launches Run Mode off-plan any day (rest/XT included) — full GPS/HR/split tracking, no pace target
+      ("run by feel"). New `type: "free"` + `freeRunWorkout()`; saves via `addRun` (rides the multi-run
+      structure — never overwrites, counts mileage, marks the day done if it's the only run).
+      See `[[project_free_run]]`.
+- [x] **Session Jul 2 2026 — shipped (1):** **multiple runs per day.** Logging a second run (manual or
+      Run Mode) used to overwrite the day's first run because the store was keyed by bare date. Now
+      `addRun` keys extra same-day runs `date#2`/`#3` (primary keeps the bare-date key → zero migration,
+      all `runs[date]` lookups + seed/export untouched); Run Mode + Log both add instead of replace;
+      extra runs count toward weekly mileage but not adherence. See `[[project_multi_run_per_day]]`.
 - [x] **Session Jul 1 2026 — shipped:** post-run **Heart-Rate Recovery (HRR)** test (auto-launches
       after a run when the strap's streaming); standalone **Quick tests** under Progress (**Resting
       HR** → saves to profile; standalone **Recovery/HRR** that joins the trend); **removed the Fuel

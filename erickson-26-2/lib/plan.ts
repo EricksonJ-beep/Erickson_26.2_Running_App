@@ -15,7 +15,8 @@ export type WorkoutType =
   | "xt"
   | "strength"
   | "race"
-  | "walk";
+  | "walk"
+  | "free"; // ad-hoc run started from Today, not on the plan — no pace target
 
 export interface Workout {
   date: string; // YYYY-MM-DD
@@ -294,5 +295,19 @@ export const TYPE_LABEL: Record<WorkoutType, string> = {
   xt: "Cross-train",
   strength: "Strength",
   race: "Race day",
-  walk: "Walk"
+  walk: "Walk",
+  free: "Free run"
 };
+
+// Synthetic workout for an ad-hoc "free run" launched from Today. Carries no
+// pace/HR target, so Run Mode tracks everything (GPS/HR/splits) without coaching
+// to a plan band. Saved via addRun() like any run.
+export function freeRunWorkout(dateISO: string): Workout {
+  return {
+    date: dateISO,
+    type: "free",
+    title: "Free run",
+    detail: "Off-plan run. Full tracking, no target pace — just go by feel.",
+    miles: 0
+  };
+}
