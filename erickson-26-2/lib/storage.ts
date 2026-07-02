@@ -31,6 +31,10 @@ export interface RecoveryTest {
 }
 
 export interface RunLog {
+  // Storage key. Absent on legacy/seeded/primary runs — those key by bare `date`
+  // (one-per-day, back-compat). Additional same-day runs get `date#2`, `date#3`…
+  // so a second run never overwrites the first. Effective key = `id ?? date`.
+  id?: string;
   date: string;
   miles: number;
   minutes: number;
@@ -100,14 +104,42 @@ function write(key: string, value: unknown) {
 export function getRuns(): Record<string, RunLog> {
   return read(RUNS_KEY, {});
 }
+
+// The effective storage key for a run: its explicit id, else its date (legacy).
+export function runKey(log: RunLog): string {
+  return log.id ?? log.date;
+}
+
+// Next free key for a run on `date`: the bare date if untaken (stays the
+// "primary" run of the day), otherwise `date#2`, `date#3`, … Skips a specific
+// key when re-keying an edit so a run never collides with itself.
+export function nextRunId(date: string, skip?: string): string {
+  const all = getRuns();
+  if ((!all[date] || date === skip)) return date;
+  for (let n = 2; ; n++) {
+    const key = `${date}#${n}`;
+    if (!all[key] || key === skip) return key;
+  }
+}
+
 export function saveRun(log: RunLog) {
   const all = getRuns();
-  all[log.date] = log;
+  all[runKey(log)] = log;
   write(RUNS_KEY, all);
 }
-export function deleteRun(date: string) {
+
+// Save a brand-new run, always in a free slot so it can never overwrite an
+// existing same-day run. Returns the run with its assigned id.
+export function addRun(log: RunLog): RunLog {
+  const id = nextRunId(log.date);
+  const stored: RunLog = { ...log, id };
+  saveRun(stored);
+  return stored;
+}
+
+export function deleteRun(key: string) {
   const all = getRuns();
-  delete all[date];
+  delete all[key];
   write(RUNS_KEY, all);
 }
 

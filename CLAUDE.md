@@ -149,7 +149,24 @@ standalone `RecoveryTest`s from Quick tests, not tied to a run). `RecoveryTest` 
 its `RunLog` (post-run) or lives in the `recovery` array (standalone); `exportAll`/`importAll` cover
 both, and the run-attached one also rides the seed pipeline for free.
 
+**Multiple runs per day:** the runs store is still `Record<string, RunLog>`, but the key is now the
+run's `runKey()` (`id ?? date`), not always the bare date. The **first/planned run of a day keeps its
+bare-date key** (`2026-07-01`) — so every `runs[date]` lookup (Today's "done", Progress adherence),
+the seed pipeline, and export/import are unchanged and **no migration** was needed. **Additional
+same-day runs get suffix keys** (`2026-07-01#2`, `#3`…) via `nextRunId()`. `addRun()` always writes to
+a free slot, so a second run **never overwrites** the first — both **Run Mode** and manual **Log** use
+it (that was the bug: an evening extra run clobbered the morning's planned run). Extra runs auto-count
+toward weekly mileage (everything sums `Object.values(runs)`) but don't affect adherence (that keys off
+the primary `runs[date]`). In **Log**, when the selected day already has a run the form flips to "Add
+another run" (won't overwrite; a hint says so); history rows key/edit/delete by `runKey`. See
+`[[project_multi_run_per_day]]`.
+
 ## In Progress / Next Up
+- [x] **Session Jul 2 2026 — shipped:** **multiple runs per day.** Logging a second run (manual or Run
+      Mode) used to overwrite the day's first run because the store was keyed by bare date. Now `addRun`
+      keys extra same-day runs `date#2`/`#3` (primary keeps the bare-date key → zero migration, all
+      `runs[date]` lookups + seed/export untouched); Run Mode + Log both add instead of replace; extra
+      runs count toward weekly mileage but not adherence. See `[[project_multi_run_per_day]]`.
 - [x] **Session Jul 1 2026 — shipped:** post-run **Heart-Rate Recovery (HRR)** test (auto-launches
       after a run when the strap's streaming); standalone **Quick tests** under Progress (**Resting
       HR** → saves to profile; standalone **Recovery/HRR** that joins the trend); **removed the Fuel

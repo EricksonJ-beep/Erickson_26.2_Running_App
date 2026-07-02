@@ -11,7 +11,7 @@ import { hrBand, hrGuide, HRBandKey, computeZones } from "@/lib/zones";
 import { useGps, GpsResult } from "@/lib/useGps";
 import { useHeartRate } from "@/lib/useHeartRate";
 import { useWakeLock } from "@/lib/useWakeLock";
-import { getProfile, saveRun, RecoveryTest } from "@/lib/storage";
+import { getProfile, addRun, RecoveryTest } from "@/lib/storage";
 import { hrr1BandInfo } from "@/lib/recovery";
 import RouteMap from "./RouteMap";
 import RecoveryTestView from "./RecoveryTestView";
@@ -480,7 +480,7 @@ export default function RunView({
       const dominant = finalHr.zoneSeconds.indexOf(Math.max(...finalHr.zoneSeconds));
       noteParts.push(`${Math.round((finalHr.zoneSeconds[dominant] / totalZone) * 100)}% Z${dominant + 1}`);
     }
-    saveRun({
+    addRun({
       date: todayISO(),
       miles: Math.round(result.miles * 100) / 100,
       minutes: Math.round((result.movingSec / 60) * 10) / 10,

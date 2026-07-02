@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { todayISO, workoutOn } from "@/lib/plan";
 import { TYPE_EFFORT } from "@/lib/guide";
-import { deleteRun, getRuns, paceOf, RunLog, saveRun } from "@/lib/storage";
+import { addRun, deleteRun, getRuns, paceOf, runKey, RunLog, saveRun } from "@/lib/storage";
 import RouteMap from "./RouteMap";
 
 export default function LogView() {
@@ -14,10 +14,11 @@ export default function LogView() {
   const [hr, setHr] = useState("");
   const [notes, setNotes] = useState("");
   const [saved, setSaved] = useState(false);
-  const [editMode, setEditMode] = useState(false);
+  const [editKey, setEditKey] = useState<string | null>(null); // storage key of run being edited; null = new run
   const [showAll, setShowAll] = useState(false);
-  const [openMap, setOpenMap] = useState<string | null>(null); // run date whose route is expanded
+  const [openMap, setOpenMap] = useState<string | null>(null); // run key whose route is expanded
   const [, force] = useState(0);
+  const editMode = editKey !== null;
 
   useEffect(() => {
     const t = todayISO();
@@ -34,6 +35,13 @@ export default function LogView() {
   const history = Object.values(runs).sort((a, b) => (a.date < b.date ? 1 : -1));
   const displayHistory = showAll ? history : history.slice(0, 7);
 
+  function clearForm() {
+    setMinutes("");
+    setRpe(5);
+    setHr("");
+    setNotes("");
+  }
+
   function loadRun(r: RunLog, scroll = true) {
     setDate(r.date);
     setMiles(String(r.miles));
@@ -41,7 +49,7 @@ export default function LogView() {
     setRpe(r.rpe);
     setHr(r.hr ? String(r.hr) : "");
     setNotes(r.notes);
-    setEditMode(true);
+    setEditKey(runKey(r));
     if (scroll) window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -56,14 +64,21 @@ export default function LogView() {
       return;
     }
     if (editMode) {
-      setMinutes("");
-      setRpe(5);
-      setHr("");
-      setNotes("");
-      setEditMode(false);
+      clearForm();
+      setEditKey(null);
     }
     const planned = workoutOn(d);
     setMiles(planned?.miles ? String(planned.miles) : "");
+  }
+
+  // Start a fresh, blank entry for the CURRENT date without loading the
+  // existing run — so a second same-day run is added, never an overwrite.
+  function addAnother() {
+    setEditKey(null);
+    clearForm();
+    const planned = workoutOn(date);
+    setMiles(planned?.miles ? String(planned.miles) : "");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function cancelEdit() {
@@ -71,11 +86,8 @@ export default function LogView() {
     setDate(t);
     const planned = workoutOn(t);
     setMiles(planned?.miles ? String(planned.miles) : "");
-    setMinutes("");
-    setRpe(5);
-    setHr("");
-    setNotes("");
-    setEditMode(false);
+    clearForm();
+    setEditKey(null);
   }
 
   function submit() {
@@ -83,20 +95,31 @@ export default function LogView() {
     const t = parseFloat(minutes);
     if (!date || !m || m <= 0) return;
     const h = parseInt(hr);
-    saveRun({
+    const fields = {
       date,
       miles: m,
       minutes: t || 0,
       rpe,
       hr: h > 0 ? h : undefined,
       notes: notes.trim()
-    });
+    };
+    if (editKey) {
+      // Preserve Run-Mode extras (route/splits/recoveryTest) not shown in the form.
+      const existing = getRuns()[editKey];
+      saveRun({ ...existing, ...fields, id: editKey });
+    } else {
+      addRun(fields); // always a free slot — never overwrites a same-day run
+    }
     setSaved(true);
-    setNotes("");
-    setEditMode(false);
+    clearForm();
+    setEditKey(null);
+    const planned = workoutOn(date);
+    setMiles(planned?.miles ? String(planned.miles) : "");
     force((n) => n + 1);
     setTimeout(() => setSaved(false), 2000);
   }
+
+  const hasRunOnDate = !!runs[date];
 
   const livePace = paceOf(parseFloat(miles) || 0, parseFloat(minutes) || 0);
 
@@ -105,7 +128,7 @@ export default function LogView() {
       <div className="bg-coal rounded-2xl border border-seam p-5">
         <div className="flex items-baseline justify-between">
           <h2 className="font-display font-bold text-2xl text-bone">
-            {editMode ? "Edit run" : "Log a run"}
+            {editMode ? "Edit run" : hasRunOnDate ? "Add another run" : "Log a run"}
           </h2>
           {editMode && (
             <button
@@ -116,6 +139,12 @@ export default function LogView() {
             </button>
           )}
         </div>
+        {!editMode && hasRunOnDate && (
+          <p className="text-[11px] text-dust mt-1 leading-snug">
+            A run is already logged for this day — saving adds a second run, it won’t
+            overwrite. Use <span className="text-bone">Edit</span> below to change an existing one.
+          </p>
+        )}
 
         <label className="block mt-4">
           <span className="text-[11px] uppercase tracking-widest text-dust font-display font-semibold">
@@ -229,8 +258,16 @@ export default function LogView() {
           onClick={submit}
           className="mt-4 w-full bg-gold text-ink font-display font-bold tracking-widest uppercase rounded-lg py-3 text-sm"
         >
-          {saved ? "Saved ✓" : editMode ? "Update run" : "Save run"}
+          {saved ? "Saved ✓" : editMode ? "Update run" : hasRunOnDate ? "Add run" : "Save run"}
         </button>
+        {editMode && (
+          <button
+            onClick={addAnother}
+            className="mt-2 w-full border border-seam text-dust font-display font-semibold tracking-widest uppercase rounded-lg py-2.5 text-xs"
+          >
+            + Add another run this day
+          </button>
+        )}
       </div>
 
       {history.length > 0 && (
@@ -241,10 +278,11 @@ export default function LogView() {
           </div>
           <div className="space-y-2">
             {displayHistory.map((r) => {
+              const key = runKey(r);
               const hasRoute = !!r.route && r.route.length > 1;
-              const mapOpen = openMap === r.date;
+              const mapOpen = openMap === key;
               return (
-                <div key={r.date} className="bg-ink rounded-lg px-3 py-2.5">
+                <div key={key} className="bg-ink rounded-lg px-3 py-2.5">
                   <div className="flex items-start gap-2">
                     <div className="flex-1 min-w-0">
                       <div className="text-sm text-bone">
@@ -263,7 +301,7 @@ export default function LogView() {
                     <div className="flex gap-1 shrink-0">
                       {hasRoute && (
                         <button
-                          onClick={() => setOpenMap(mapOpen ? null : r.date)}
+                          onClick={() => setOpenMap(mapOpen ? null : key)}
                           aria-expanded={mapOpen}
                           className={`text-xs px-2 py-1 border rounded ${
                             mapOpen ? "text-gold border-gold/40" : "text-dust border-seam"
@@ -279,7 +317,7 @@ export default function LogView() {
                         Edit
                       </button>
                       <button
-                        onClick={() => { deleteRun(r.date); force((n) => n + 1); }}
+                        onClick={() => { deleteRun(key); force((n) => n + 1); }}
                         className="text-ember/70 text-xs px-2 py-1 border border-ember/30 rounded"
                       >
                         Del
