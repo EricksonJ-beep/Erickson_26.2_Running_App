@@ -188,6 +188,20 @@ another run" (won't overwrite; a hint says so); history rows key/edit/delete by 
 `[[project_multi_run_per_day]]`.
 
 ## In Progress / Next Up
+- [x] **Session Jul 9 2026 — shipped (2): Capacitor native shell, Milestone 1 (approved by Jon).**
+      Full 4-milestone plan in `docs/PHASE2_BACKGROUND_GPS.md`; **M1 built + CI green same day**:
+      Capacitor 8 `android/` project in **remote-URL mode** (webview loads the live Vercel app →
+      `push = deploy` still updates the native app; APK rebuilds only for native-layer changes);
+      `@capacitor-community/background-geolocation` foreground service = **background GPS with the
+      screen off**; `lib/nativeBridge.ts` (zero @capacitor/* imports in the web bundle — talks to the
+      injected `window.Capacitor` bridge); `useGps` refactored to a shared `onFix()` pipeline with
+      swappable position sources (native watcher / web watchPosition — all math unchanged).
+      **APK via GitHub Actions** (`android-apk.yml`: Actions "Run workflow" button or an `android-v*`
+      tag → artifact). Signing: password-protected keystore committed at `erickson-26-2/android/signing/`
+      (alias `erickson262`), password goes in the **`KEYSTORE_PASSWORD` repo secret — Jon must add it**
+      (Codespace token can't; password was handed to Jon in chat Jul 9). Until then CI builds unsigned.
+      **Next:** Jon adds secret → retag/rerun → sideload APK → first pocketed-phone run validates M1.
+      Then M2 native BLE HR (switch daily drivers after), M3 TTS ducking, M4 polish.
 - [x] **Session Jul 9 2026 — shipped: mid-run crash recovery.** Jon lost a run Jul 8 (~halfway,
       lock overlay on): screen went off → Android killed the backgrounded PWA → Chrome restored the
       tab by *reloading* → run state (all in React refs) gone. Built checkpointing: Run Mode writes

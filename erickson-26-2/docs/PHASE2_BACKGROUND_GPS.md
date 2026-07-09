@@ -1,11 +1,21 @@
 # Phase 2 — Native Android Shell (Capacitor): Full Build Plan
 
-> Status: **awaiting Jon's approval** (drafted Jul 9 2026; supersedes the earlier
-> proposal-only version of this doc). Nothing below is built.
+> Status: **approved by Jon Jul 9 2026 — Milestone 1 BUILT the same day** (CI
+> green, first APK produced). Remaining: Jon adds the `KEYSTORE_PASSWORD`
+> secret → rebuild → sideload → first real device run. M2 (BLE HR), M3
+> (ducking), M4 (polish) not started.
 >
 > Trigger: the Jul 8 lost run proved the browser ceiling is real — wake lock +
 > lock overlay can't survive a screen-off + process kill. Checkpointing (shipped
 > Jul 9) bounds the damage; only a native shell prevents it.
+>
+> **M1 as built:** `capacitor.config.ts` (remote-URL → Vercel), `android/`
+> (Capacitor 8, SDK 36), `lib/nativeBridge.ts` (zero-dep access to the injected
+> bridge — the web bundle imports nothing from @capacitor/*), `useGps` shared
+> `onFix()` pipeline with native-watcher/web-watchPosition sources,
+> `.github/workflows/android-apk.yml` (dispatch or `android-v*` tag → APK
+> artifact). Signing: committed password-protected keystore
+> (`android/signing/`, alias `erickson262`) + `KEYSTORE_PASSWORD` secret.
 
 ## What this buys
 
