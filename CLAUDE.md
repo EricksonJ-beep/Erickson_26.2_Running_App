@@ -199,6 +199,9 @@ another run" (won't overwrite; a hint says so); history rows key/edit/delete by 
       (RunView), recovery card + `launchRun()` guard (TodayView). Hardware validated by Jon (strap
       + tests working); **max-HR test planned soon** to sharpen zones. Build + tsc clean.
       *Recovery path untested on hardware — next interrupted run is the validation.*
+      Also: **wk 5 long run (9 mi) moved Sat Jul 11 → Sun Jul 12** (Jon's schedule), and
+      `docs/PHASE2_BACKGROUND_GPS.md` rewritten as the **full 4-milestone Capacitor build plan**
+      (Android-only, remote-URL shell, CI-built sideloaded APK, $0) — **awaiting Jon's approval**.
 - [x] **Session Jul 2 2026 — shipped (4): Fable 5 review Low items (#14–19) — backlog cleared.**
       **#14** HRR checkpoint capture is time-anchored: new `useHeartRate.sampleAt(atMs)` reads the
       strap samples around the true 1:00/2:00 mark, so a late/throttled timer tick can't skew the
