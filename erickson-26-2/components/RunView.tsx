@@ -12,7 +12,9 @@ import { useGps, GpsResult } from "@/lib/useGps";
 import { useHeartRate } from "@/lib/useHeartRate";
 import { useWakeLock } from "@/lib/useWakeLock";
 import { useCues } from "@/lib/useCues";
-import { getProfile, addRun, RecoveryTest } from "@/lib/storage";
+import {
+  getProfile, addRun, clearLiveRun, saveLiveRun, LiveRunCheckpoint, RecoveryTest
+} from "@/lib/storage";
 import { hrr1BandInfo } from "@/lib/recovery";
 import RouteMap, { elevationStats } from "./RouteMap";
 import RecoveryTestView from "./RecoveryTestView";
@@ -30,6 +32,9 @@ const COUNTDOWN_SEC = 5;
 const UNLOCK_HOLD_MS = 2000;
 // No GPS fix for this long (while running) → spoken "signal lost" cue.
 const GPS_STALE_MS = 12_000;
+// Mid-run checkpoint cadence. Android can kill the backgrounded PWA at any
+// moment; at 10 s the worst case is losing a few strides, not the run.
+const CHECKPOINT_MS = 10_000;
 
 function fmtPace(sec: number | null): string {
   if (sec === null || !isFinite(sec) || sec <= 0) return "—";
@@ -66,12 +71,16 @@ function hrColor(bpm: number | null, band: { lo: number; hi: number } | null): S
 
 export default function RunView({
   workout,
+  resume,
   onClose
 }: {
   workout: Workout;
+  resume?: LiveRunCheckpoint; // recover a crash-interrupted run: skip countdown, restore state
   onClose: (saved: boolean) => void;
 }) {
-  const [phase, setPhase] = useState<"countdown" | "live" | "recovery" | "summary">("countdown");
+  const [phase, setPhase] = useState<"countdown" | "live" | "recovery" | "summary">(
+    resume ? "live" : "countdown"
+  );
   const [count, setCount] = useState(COUNTDOWN_SEC); // 5→1, then 0 = GO
   const [locked, setLocked] = useState(false);
   const [voiceOn, setVoiceOn] = useState(true);
@@ -106,9 +115,42 @@ export default function RunView({
 
   useEffect(() => {
     wake.acquire();
+    // Recovering an interrupted run: rebuild GPS + HR accumulators from the
+    // checkpoint before any fix arrives. The strap needs a manual re-pair
+    // (Web Bluetooth requires a gesture after a reload) — the live screen's
+    // Pair button covers that.
+    if (resume) {
+      gps.restore(resume.gps, resume.savedAt);
+      hr.restoreTotals(resume.hr);
+    }
     return () => wake.release();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Crash-recovery checkpoint: persist the run in flight every CHECKPOINT_MS,
+  // plus immediately on backgrounding (the moment Android is most likely to
+  // kill us) and at GO. Cleared only on an explicit save or discard — so a
+  // kill during the summary or HRR test still leaves the run recoverable.
+  useEffect(() => {
+    if (phase !== "live") return;
+    const writeCheckpoint = () => {
+      const g = gps.checkpoint();
+      if (!g) return;
+      saveLiveRun({ workout, savedAt: Date.now(), gps: g, hr: hr.totals() });
+    };
+    writeCheckpoint();
+    const id = window.setInterval(writeCheckpoint, CHECKPOINT_MS);
+    const onHide = () => {
+      if (document.visibilityState === "hidden") writeCheckpoint();
+    };
+    document.addEventListener("visibilitychange", onHide);
+    window.addEventListener("pagehide", writeCheckpoint);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onHide);
+      window.removeEventListener("pagehide", writeCheckpoint);
+    };
+  }, [phase, gps.checkpoint, hr.totals, workout]);
 
   // Loud cues (alert/info gain 0.9/0.55, speech at full volume) so they punch
   // through music outdoors — a browser PWA can't duck Spotify. Shared engine.
@@ -425,6 +467,7 @@ export default function RunView({
       setSaveError(true);
       return;
     }
+    clearLiveRun(); // the run is safely in the log — drop the crash checkpoint
     onClose(true);
   }
 
@@ -612,6 +655,7 @@ export default function RunView({
             <button
               onClick={() => {
                 if (window.confirm("Discard this run? GPS route, splits, and HR won’t be saved.")) {
+                  clearLiveRun();
                   onClose(false);
                 }
               }}

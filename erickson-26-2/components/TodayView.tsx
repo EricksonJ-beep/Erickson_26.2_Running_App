@@ -10,15 +10,38 @@ import { TYPE_EFFORT } from "@/lib/guide";
 import RunView from "@/components/RunView";
 import { quoteForDate } from "@/lib/quotes";
 import {
-  addCalis, CALIS_GOAL, getCalis, getDone, getProfile, getRuns, runsOn, paceOf, toggleDone
+  addCalis, CALIS_GOAL, clearLiveRun, getCalis, getDone, getLiveRun, getProfile, getRuns,
+  runsOn, paceOf, toggleDone, LiveRunCheckpoint
 } from "@/lib/storage";
 
 export default function TodayView({ onGoLog }: { onGoLog: () => void }) {
   const [today, setToday] = useState("");
   const [runWorkout, setRunWorkout] = useState<Workout | null>(null); // the workout Run Mode is tracking (planned or free)
+  // Crash recovery: a leftover mid-run checkpoint means a run was interrupted
+  // (page killed) and never saved. Offer to recover it before anything else.
+  const [pendingRecovery, setPendingRecovery] = useState<LiveRunCheckpoint | null>(null);
+  const [resumeCp, setResumeCp] = useState<LiveRunCheckpoint | null>(null);
   const [, force] = useState(0);
-  useEffect(() => setToday(todayISO()), []);
+  useEffect(() => {
+    setToday(todayISO());
+    setPendingRecovery(getLiveRun());
+  }, []);
   if (!today) return null;
+
+  // Launching a fresh run overwrites the checkpoint slot at GO — make sure an
+  // unrecovered run is a conscious sacrifice, never a silent one.
+  const launchRun = (w: Workout) => {
+    if (pendingRecovery) {
+      const mi = (pendingRecovery.gps.meters / 1609.344).toFixed(2);
+      if (!window.confirm(
+        `An interrupted run (${mi} mi) hasn't been recovered — starting a new run discards it for good. Continue?`
+      )) return;
+      clearLiveRun();
+      setPendingRecovery(null);
+    }
+    setResumeCp(null);
+    setRunWorkout(w);
+  };
 
   const week = findWeek(today);
   const workout = workoutOn(today);
@@ -45,11 +68,52 @@ export default function TodayView({ onGoLog }: { onGoLog: () => void }) {
       {runWorkout && (
         <RunView
           workout={runWorkout}
+          resume={resumeCp ?? undefined}
           onClose={() => {
             setRunWorkout(null);
+            setResumeCp(null);
+            setPendingRecovery(getLiveRun()); // still set if the run wasn't saved/discarded
             force((n) => n + 1);
           }}
         />
+      )}
+
+      {/* Interrupted-run recovery — a checkpoint survived a page kill */}
+      {pendingRecovery && (
+        <div className="bg-coal rounded-xl border border-ember/40 px-4 py-3.5">
+          <div className="text-[11px] uppercase tracking-widest text-ember font-display font-bold">
+            Interrupted run found
+          </div>
+          <p className="text-xs text-bone/90 mt-1 leading-snug">
+            {(pendingRecovery.gps.meters / 1609.344).toFixed(2)} mi ·{" "}
+            {pendingRecovery.workout.title} · started {fmtClockTime(pendingRecovery.gps.startMs)} —
+            the app was closed mid-run before it could be saved. Recover it to keep running, or
+            stop right away and save what was tracked.
+          </p>
+          <div className="flex gap-2 mt-3">
+            <button
+              onClick={() => {
+                setResumeCp(pendingRecovery);
+                setRunWorkout(pendingRecovery.workout);
+                setPendingRecovery(null);
+              }}
+              className="flex-1 bg-gold text-ink font-display font-bold tracking-widest uppercase rounded-lg py-3 text-sm min-h-[48px]"
+            >
+              Recover run
+            </button>
+            <button
+              onClick={() => {
+                if (window.confirm("Discard the interrupted run? Its GPS trace and splits are lost for good.")) {
+                  clearLiveRun();
+                  setPendingRecovery(null);
+                }
+              }}
+              className="px-4 bg-ink border border-seam text-dust font-display font-bold tracking-widest uppercase rounded-lg py-3 text-sm min-h-[48px]"
+            >
+              Discard
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Daily fire — quote of the day, shown in full */}
@@ -195,7 +259,7 @@ export default function TodayView({ onGoLog }: { onGoLog: () => void }) {
 
               {workout.miles > 0 && (
                 <button
-                  onClick={() => setRunWorkout(workout)}
+                  onClick={() => launchRun(workout)}
                   className="mt-4 w-full bg-gold text-ink font-display font-bold tracking-widest uppercase rounded-lg py-4 text-base min-h-[48px]"
                 >
                   ▶ Start run
@@ -235,7 +299,7 @@ export default function TodayView({ onGoLog }: { onGoLog: () => void }) {
       {/* Free run — launch Run Mode any day (even rest/cross-train), no plan
           workout needed. Full GPS/HR/split tracking, no pace target. */}
       <button
-        onClick={() => setRunWorkout(freeRunWorkout(today))}
+        onClick={() => launchRun(freeRunWorkout(today))}
         className="w-full bg-coal rounded-xl border border-seam active:border-gold/50 px-4 py-3.5 flex items-center justify-between text-left min-h-[48px]"
       >
         <div className="min-w-0">
@@ -406,6 +470,15 @@ function fmt(iso: string): string {
     weekday: "short",
     month: "short",
     day: "numeric"
+  });
+}
+
+// "Tue 7:41 PM" — when the interrupted run began (epoch ms).
+function fmtClockTime(ms: number): string {
+  return new Date(ms).toLocaleString("en-US", {
+    weekday: "short",
+    hour: "numeric",
+    minute: "2-digit"
   });
 }
 

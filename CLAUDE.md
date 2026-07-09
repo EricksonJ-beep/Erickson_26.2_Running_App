@@ -78,8 +78,19 @@ Single page, four bottom tabs (`app/page.tsx`): **Today · Plan · Log · Progre
   double-pointerdown interval leak + reset on lock-toggle/background/unmount (fixed the old
   "couldn't re-lock" glitch). Live screen shows a GPS accuracy readout (`gps.lastAccuracy`). GPS
   tuning: accuracy gate `MAX_ACCURACY_M` 20 m, min-movement gate `MIN_STEP_M` 1 m, Haversine summed
-  per-segment. The phone-locked / background-GPS + music-ducking goals need a native wrapper — see
-  `erickson-26-2/docs/PHASE2_BACKGROUND_GPS.md` (Capacitor proposal, not built).
+  per-segment. **Crash recovery:** the run in flight is checkpointed to `hr_liveRun_v1` every 10 s
+  (`CHECKPOINT_MS`), plus at GO and on backgrounding (`visibilitychange`/`pagehide`) — so Android
+  killing the backgrounded PWA (Jon lost a run this way Jul 8) no longer loses the run. On next
+  launch Today shows an ember **"Interrupted run found"** card: **Recover run** re-enters Run Mode
+  live (skips countdown; `gps.restore()` + `hr.restoreTotals()` rebuild distance/clock/splits/route/
+  zone-time; the dead gap counts as *paused* time and the first fix bridges with zero distance
+  credit; strap needs a manual re-pair — Web Bluetooth can't reconnect without a gesture after a
+  reload) or **Discard**. Starting a *new* run with a checkpoint pending `confirm()`s first (GO
+  overwrites the slot). Checkpoint clears only on save/discard, so a kill during the summary/HRR
+  test stays recoverable. The phone-locked / background-GPS + music-ducking goals still need a
+  native wrapper — see `erickson-26-2/docs/PHASE2_BACKGROUND_GPS.md` (Capacitor proposal, not
+  built); checkpointing bounds the damage (no *new* miles accrue while dead) but doesn't prevent
+  the kill.
 - **Fitness tests** (`components/HRTestView.tsx`) — fullscreen, strap-paired field tests launched
   from the Progress tab that measure the two numbers the zone engine wants, instead of estimating.
   **Max HR:** graded build-to-failure run (~8 min: build → hard → very hard → all-out sprint, with
@@ -157,7 +168,9 @@ Single page, four bottom tabs (`app/page.tsx`): **Today · Plan · Log · Progre
 All in `localStorage`, keys `hr_*_v1`: `RunLog` (incl. optional `route`, `splits`, `hr`, `type`,
 `zoneSeconds`, `recoveryTest`), `Profile` (age/resting/max/LTHR), `BodyLog`, `CalisLog`, plus `done`
 (non-run completions), `seeded` (dedupe ledger), and `recovery` (`hr_recovery_v1` — an array of
-standalone `RecoveryTest`s from Quick tests, not tied to a run). `RecoveryTest` (`endHR`,
+standalone `RecoveryTest`s from Quick tests, not tied to a run). `hr_liveRun_v1` holds the
+**transient mid-run checkpoint** (`LiveRunCheckpoint`: workout + GPS state + HR accumulators) —
+crash-recovery only, not exported, cleared on save/discard. `RecoveryTest` (`endHR`,
 `hrr1`/`hrr2` drops, `hrr1Label`, `incomplete`, `lowConfidence`, optional `runType`) either rides on
 its `RunLog` (post-run) or lives in the `recovery` array (standalone); `exportAll`/`importAll` cover
 both, and the run-attached one also rides the seed pipeline for free.
@@ -175,6 +188,17 @@ another run" (won't overwrite; a hint says so); history rows key/edit/delete by 
 `[[project_multi_run_per_day]]`.
 
 ## In Progress / Next Up
+- [x] **Session Jul 9 2026 — shipped: mid-run crash recovery.** Jon lost a run Jul 8 (~halfway,
+      lock overlay on): screen went off → Android killed the backgrounded PWA → Chrome restored the
+      tab by *reloading* → run state (all in React refs) gone. Built checkpointing: Run Mode writes
+      `hr_liveRun_v1` every 10 s + at GO + on backgrounding; Today offers **Recover run** (re-enters
+      live with distance/clock/splits/route/zone-time restored, gap = paused, distance bridged) or
+      Discard; new-run launch confirms before overwriting a pending checkpoint. New:
+      `LiveRunCheckpoint` + `save/get/clearLiveRun` (storage), `gps.checkpoint()/restore()` +
+      shared `buildRoute()` (useGps), `hr.totals()/restoreTotals()` (useHeartRate), `resume` prop
+      (RunView), recovery card + `launchRun()` guard (TodayView). Hardware validated by Jon (strap
+      + tests working); **max-HR test planned soon** to sharpen zones. Build + tsc clean.
+      *Recovery path untested on hardware — next interrupted run is the validation.*
 - [x] **Session Jul 2 2026 — shipped (4): Fable 5 review Low items (#14–19) — backlog cleared.**
       **#14** HRR checkpoint capture is time-anchored: new `useHeartRate.sampleAt(atMs)` reads the
       strap samples around the true 1:00/2:00 mark, so a late/throttled timer tick can't skew the

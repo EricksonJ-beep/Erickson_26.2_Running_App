@@ -14,7 +14,7 @@
 // so the countdown can warm GPS up and we throw away everything before GO.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { RoutePoint } from "./storage";
+import { LiveRunCheckpoint, RoutePoint } from "./storage";
 
 // Drop fixes worse than this (m). Tighter than the old 25 m: on a track with
 // open sky the H10/phone usually reports 5–15 m, so 20 keeps the good ones
@@ -111,6 +111,9 @@ export function useGps(active: boolean) {
   const pendingRef = useRef<{ lat: number; lng: number; alt: number | null; t: number } | null>(null);
   const lastAccuracyRef = useRef<number | null>(null);
   const lastFixAtRef = useRef<number | null>(null); // any fix arriving = we have signal
+  // Trace carried over from a crash-recovered run — merged ahead of the live
+  // points when building the saved route (its `t` values are already relative).
+  const restoredRouteRef = useRef<RoutePoint[]>([]);
 
   // Elapsed active time (ms) at instant `now`: wall clock since GO, less all
   // manual-pause time (completed + any in-progress pause). Pure timestamp math.
@@ -304,11 +307,17 @@ export function useGps(active: boolean) {
     snapshot();
   }, [snapshot]);
 
-  const finish = useCallback((): GpsResult => {
-    const pts = ptsRef.current;
-    let route: RoutePoint[] = [];
-    let lastT = -Infinity;
-    for (const p of pts) {
+  // Downsample the live points into a storable route, prepending any trace
+  // recovered from a checkpoint. Shared by finish() and checkpoint().
+  const buildRoute = useCallback((): RoutePoint[] => {
+    const restored = restoredRouteRef.current;
+    let route: RoutePoint[] = [...restored];
+    // Resume the 5 s sampling clock from the last restored point (its t is
+    // relative seconds; live points carry epoch ms).
+    let lastT = restored.length
+      ? startRef.current + restored[restored.length - 1].t * 1000
+      : -Infinity;
+    for (const p of ptsRef.current) {
       if (p.t - lastT < ROUTE_SAMPLE_MS) continue;
       lastT = p.t;
       route.push({
@@ -327,13 +336,59 @@ export function useGps(active: boolean) {
       route = route.filter((_, i) => i % stride === 0);
       if (route[route.length - 1] !== last) route.push(last);
     }
+    return route;
+  }, []);
+
+  const finish = useCallback((): GpsResult => {
+    const pts = ptsRef.current;
     return {
       miles: (pts[pts.length - 1]?.d ?? 0) / METERS_PER_MILE,
       movingSec: activeMs(Date.now()) / 1000,
       splits: splitsRef.current,
-      route
+      route: buildRoute()
     };
-  }, [activeMs]);
+  }, [activeMs, buildRoute]);
 
-  return { ...state, start, pause, resume, finish };
+  // Serializable snapshot of the run in flight, for the crash-recovery
+  // checkpoint. Null until GO — there's nothing worth recovering pre-start.
+  const checkpoint = useCallback((): LiveRunCheckpoint["gps"] | null => {
+    if (!startedRef.current || !startRef.current) return null;
+    const last = ptsRef.current[ptsRef.current.length - 1];
+    return {
+      startMs: startRef.current,
+      pauseAccumMs: pauseAccumMsRef.current,
+      pausedAtMs: pauseStartRef.current,
+      meters: last?.d ?? 0,
+      last: last ? { lat: last.lat, lng: last.lng, alt: last.alt } : null,
+      route: buildRoute(),
+      splits: [...splitsRef.current]
+    };
+  }, [buildRoute]);
+
+  // Rebuild the run from a checkpoint after a page kill. The dead gap
+  // (checkpoint → now) counts as manual-pause time: no fixes were tracked, so
+  // crediting the clock would wreck pace and splits. The first live fix
+  // bridges from the last known position with zero distance credit — same
+  // mechanics as resuming from a manual pause.
+  const restore = useCallback((c: LiveRunCheckpoint["gps"], savedAt: number) => {
+    const now = Date.now();
+    startedRef.current = true;
+    startRef.current = c.startMs;
+    pauseAccumMsRef.current =
+      c.pauseAccumMs + (c.pausedAtMs != null ? now - c.pausedAtMs : now - savedAt);
+    pauseStartRef.current = null;
+    pausedRef.current = false;
+    autoPausedRef.current = false;
+    lowSpeedSinceRef.current = null;
+    skipSegmentRef.current = true; // bridge the gap
+    splitsRef.current = [...c.splits];
+    restoredRouteRef.current = c.route;
+    pendingRef.current = null;
+    ptsRef.current = c.last
+      ? [{ lat: c.last.lat, lng: c.last.lng, alt: c.last.alt, t: savedAt, d: c.meters }]
+      : [];
+    snapshot();
+  }, [snapshot]);
+
+  return { ...state, start, pause, resume, finish, checkpoint, restore };
 }

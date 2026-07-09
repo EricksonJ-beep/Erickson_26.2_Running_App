@@ -137,6 +137,26 @@ export function useHeartRate() {
     return { avg, spread, count: xs.length };
   }, []);
 
+  // Serializable run totals for the mid-run crash-recovery checkpoint.
+  const totals = useCallback(() => ({
+    weightedSum: weightedSumRef.current,
+    weightSec: weightSecRef.current,
+    zoneSeconds: zoneSecondsRef.current.map((s) => Math.round(s * 10) / 10)
+  }), []);
+
+  // Rebuild the accumulators from a checkpoint after a page kill, so avg HR
+  // and time-in-zone carry across the recovery. lastSample resets so no zone
+  // time is credited across the dead gap (same rule as a signal gap).
+  const restoreTotals = useCallback(
+    (t: { weightedSum: number; weightSec: number; zoneSeconds: number[] }) => {
+      weightedSumRef.current = t.weightedSum;
+      weightSecRef.current = t.weightSec;
+      zoneSecondsRef.current = [0, 0, 0, 0, 0].map((_, i) => t.zoneSeconds[i] ?? 0);
+      lastSampleRef.current = 0;
+    },
+    []
+  );
+
   const subscribe = useCallback(
     async (device: BTDevice) => {
       const server = await device.gatt!.connect();
@@ -266,6 +286,8 @@ export function useHeartRate() {
     zoneSeconds: zoneSecondsRef.current,
     recentSample, // rolling-avg over the last N seconds (HRR capture)
     sampleAt, // rolling-avg anchored at a specific instant (HRR checkpoints)
+    totals, // run accumulators for the mid-run checkpoint
+    restoreTotals, // rebuild accumulators from a recovered checkpoint
     connect, // full (re-)pair via the chooser
     reconnect, // one-tap retry of the known strap, no chooser
     disconnect

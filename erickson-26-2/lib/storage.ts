@@ -1,6 +1,6 @@
 "use client";
 
-import type { WorkoutType } from "./plan";
+import type { Workout, WorkoutType } from "./plan";
 import { SEED_BODY, SEED_RUNS } from "./seed";
 
 // All data lives in localStorage on Jon's phone.
@@ -87,6 +87,7 @@ const BODY_KEY = "hr_body_v1";
 const SEEDED_KEY = "hr_seeded_v1"; // seed entries already merged (date#rev -> true)
 
 const EXPORT_KEY = "hr_lastExport_v1"; // ISO timestamp of the last JSON export
+const LIVE_RUN_KEY = "hr_liveRun_v1"; // mid-run checkpoint (crash recovery), cleared on save/discard
 
 function read<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
@@ -166,6 +167,41 @@ export function deleteRun(key: string) {
   const all = { ...getRuns() };
   delete all[key];
   write(RUNS_KEY, all);
+}
+
+// ── Mid-run checkpoint (crash recovery) ──
+// A run in flight lives only in React state; Android reclaiming the
+// backgrounded PWA reloads the page and wipes it — a lost run, unrecoverable.
+// Run Mode writes this snapshot every few seconds so a kill mid-run becomes
+// "recover and keep going" instead of total loss. Transient: not exported,
+// cleared the moment the run is saved or discarded.
+export interface LiveRunCheckpoint {
+  workout: Workout; // what the run was launched as (planned or free)
+  savedAt: number; // ms epoch of this checkpoint
+  gps: {
+    startMs: number; // epoch of GO
+    pauseAccumMs: number; // completed manual-pause time
+    pausedAtMs: number | null; // in-progress manual pause, if any
+    meters: number; // cumulative distance
+    last: { lat: number; lng: number; alt: number | null } | null; // latest fix
+    route: RoutePoint[]; // downsampled trace so far
+    splits: number[];
+  };
+  hr: { weightedSum: number; weightSec: number; zoneSeconds: number[] };
+}
+
+export function saveLiveRun(c: LiveRunCheckpoint) {
+  write(LIVE_RUN_KEY, c);
+}
+export function getLiveRun(): LiveRunCheckpoint | null {
+  return read<LiveRunCheckpoint | null>(LIVE_RUN_KEY, null);
+}
+export function clearLiveRun() {
+  try {
+    window.localStorage.removeItem(LIVE_RUN_KEY);
+  } catch {
+    // storage unavailable — nothing to clear
+  }
 }
 
 // Standalone HRR tests run from the Progress tab (no run to attach to).
