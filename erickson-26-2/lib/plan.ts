@@ -161,7 +161,7 @@ export const PLAN: Week[] = [
     { d: 1, type: "intervals", title: "Intervals", detail: "1 mi easy → 5×(2 min hard / 2 min jog) → 1 mi easy. ~4 mi.", miles: 4 },
     { d: 2, type: "easy", title: "Easy run", detail: "3 mi conversational.", miles: 3 },
     XT(3),
-    { d: 5, type: "long", title: "Long run", detail: "9 mi relaxed. Test race-day breakfast this morning.", miles: 9 }
+    { d: 6, type: "long", title: "Long run", detail: "9 mi relaxed. Moved to Sunday — Saturday didn't work this week. Test race-day breakfast this morning. Monday's strength is optional as always; skip or go light if the legs are still heavy.", miles: 9 }
   ]),
   wk(6, "Half Build", "2026-07-13", "Longest tempo yet. Race pace gets real.", [
     STR(0),
