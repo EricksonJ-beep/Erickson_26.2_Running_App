@@ -15,6 +15,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LiveRunCheckpoint, RoutePoint } from "./storage";
+import { nativeGeo } from "./nativeBridge";
 
 // Drop fixes worse than this (m). Tighter than the old 25 m: on a track with
 // open sky the H10/phone usually reports 5–15 m, so 20 keeps the good ones
@@ -159,17 +160,12 @@ export function useGps(active: boolean) {
     });
   }, [activeMs]);
 
-  useEffect(() => {
-    if (!active) return;
-    if (typeof navigator === "undefined" || !navigator.geolocation) {
-      statusRef.current = "unsupported";
-      snapshot();
-      return;
-    }
-
-    const watchId = navigator.geolocation.watchPosition(
-      (pos) => {
-        const { latitude, longitude, accuracy, altitude } = pos.coords;
+  // Shared fix pipeline. Both position sources — web `watchPosition` and the
+  // native background watcher — feed every fix through here, so the filtering,
+  // warmup, pause/bridge, distance, and split logic is written exactly once.
+  const onFix = useCallback(
+    (latitude: number, longitude: number, accuracy: number, altitude: number | null) => {
+      {
         const t = Date.now();
         lastAccuracyRef.current = accuracy;
         lastFixAtRef.current = t; // a fix arrived → signal is alive
@@ -250,25 +246,83 @@ export function useGps(active: boolean) {
         }
 
         snapshot();
-      },
-      (err) => {
-        if (err.code === err.PERMISSION_DENIED) {
-          statusRef.current = "denied";
-          snapshot();
-        }
-        // timeouts/unavailable: keep watching — signal often returns
-      },
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
-    );
+      }
+    },
+    [snapshot, activeMs]
+  );
+
+  useEffect(() => {
+    if (!active) return;
 
     // 1 s ticker only triggers recomputation from timestamps —
     // nothing accumulates on the timer itself.
     const ticker = window.setInterval(snapshot, 1000);
+    let stopSource: (() => void) | undefined;
+
+    const native = nativeGeo();
+    if (native) {
+      // Native Android shell: the plugin's foreground service keeps fixes
+      // flowing with the screen off / phone pocketed — the reason the shell
+      // exists. The notification text below is what Android pins during runs.
+      let removed = false;
+      let watcherId: string | null = null;
+      native
+        .addWatcher(
+          {
+            backgroundTitle: "Run in progress",
+            backgroundMessage: "Tracking your run — GPS stays on with the screen off.",
+            requestPermissions: true,
+            stale: false, // never seed from a cached last-known fix
+            distanceFilter: 0 // every fix; our own gates do the filtering
+          },
+          (position, error) => {
+            if (error) {
+              if (error.code === "NOT_AUTHORIZED") {
+                statusRef.current = "denied";
+                snapshot();
+              }
+              return; // other errors: keep watching — signal often returns
+            }
+            if (!position || position.simulated) return;
+            onFix(position.latitude, position.longitude, position.accuracy, position.altitude);
+          }
+        )
+        .then((id) => {
+          watcherId = id;
+          if (removed) native.removeWatcher({ id }).catch(() => {});
+        })
+        .catch(() => {
+          statusRef.current = "denied";
+          snapshot();
+        });
+      stopSource = () => {
+        removed = true;
+        if (watcherId) native.removeWatcher({ id: watcherId }).catch(() => {});
+      };
+    } else if (typeof navigator !== "undefined" && navigator.geolocation) {
+      const watchId = navigator.geolocation.watchPosition(
+        (pos) =>
+          onFix(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, pos.coords.altitude),
+        (err) => {
+          if (err.code === err.PERMISSION_DENIED) {
+            statusRef.current = "denied";
+            snapshot();
+          }
+          // timeouts/unavailable: keep watching — signal often returns
+        },
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
+      );
+      stopSource = () => navigator.geolocation.clearWatch(watchId);
+    } else {
+      statusRef.current = "unsupported";
+      snapshot();
+    }
+
     return () => {
-      navigator.geolocation.clearWatch(watchId);
       window.clearInterval(ticker);
+      stopSource?.();
     };
-  }, [active, snapshot, activeMs]);
+  }, [active, onFix, snapshot]);
 
   // Begin accumulating at GO. Anything captured during pre-warm is discarded;
   // the latest locked fix (if any) becomes the zero-distance baseline so the
