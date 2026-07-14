@@ -76,7 +76,31 @@ export function loadNativeGeo(): Promise<BackgroundGeolocationPlugin | null> {
   if (!isNativeApp()) return Promise.resolve(null);
   if (!geoPromise) {
     geoPromise = import("@capacitor/core")
-      .then((m) => m.registerPlugin<BackgroundGeolocationPlugin>("BackgroundGeolocation"))
+      .then((m) => {
+        const proxy = m.registerPlugin<BackgroundGeolocationPlugin>("BackgroundGeolocation");
+        // Two traps found in the field (Jon's crash log, Jul 14):
+        // 1. Never resolve a promise with the raw registerPlugin proxy — the
+        //    promise machinery probes `.then`, and the proxy turns that into
+        //    a native call: `"BackgroundGeolocation.then()" is not
+        //    implemented on android`. Resolve with a plain wrapper instead.
+        // 2. Callback-style methods (addWatcher) can return the watcher id
+        //    SYNCHRONOUSLY (a string), not a promise — chaining .then() on
+        //    the raw return crashed ("addWatcher(...).then is not a
+        //    function"). call() normalizes sync returns/throws to promises.
+        const call = <T>(fn: () => T | Promise<T>): Promise<T> => {
+          try {
+            return Promise.resolve(fn());
+          } catch (e) {
+            return Promise.reject(e);
+          }
+        };
+        const wrapped: BackgroundGeolocationPlugin = {
+          addWatcher: (o, cb) => call(() => proxy.addWatcher(o, cb)),
+          removeWatcher: (o) => call(() => proxy.removeWatcher(o)),
+          openSettings: () => call(() => proxy.openSettings())
+        };
+        return wrapped;
+      })
       .catch(() => null);
   }
   return geoPromise;

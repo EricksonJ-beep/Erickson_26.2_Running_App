@@ -301,6 +301,8 @@ export function useGps(active: boolean) {
       let removed = false;
       let watcherId: string | null = null;
       let geo: BackgroundGeolocationPlugin | null = null;
+      let gotFix = false;
+      let livenessTimer: number | null = null;
       loadNativeGeo().then((native) => {
         if (removed) return;
         if (!native) {
@@ -327,6 +329,7 @@ export function useGps(active: boolean) {
                 return; // other errors: keep watching — signal often returns
               }
               if (!position || position.simulated) return;
+              gotFix = true;
               onFix(position.latitude, position.longitude, position.accuracy, position.altitude);
             }
           )
@@ -334,7 +337,20 @@ export function useGps(active: boolean) {
             watcherId = id;
             sourceRef.current = "native"; // watcher live: background-capable GPS
             snapshot();
-            if (removed) native.removeWatcher({ id }).catch(() => {});
+            if (removed) {
+              native.removeWatcher({ id }).catch(() => {});
+              return;
+            }
+            // Liveness net: a registered watcher that never delivers a fix
+            // (device/OS quirk) must not strand the run on "Acquiring" —
+            // swap to the web source Sensor check has proven works.
+            livenessTimer = window.setTimeout(() => {
+              if (removed || gotFix) return;
+              noteTrapped("native GPS watcher silent for 12 s → web fallback");
+              native.removeWatcher({ id }).catch(() => {});
+              watcherId = null;
+              startWebWatch();
+            }, 12_000);
           })
           .catch((e) => {
             if (removed) return;
@@ -344,6 +360,7 @@ export function useGps(active: boolean) {
       });
       stopSource = () => {
         removed = true;
+        if (livenessTimer !== null) window.clearTimeout(livenessTimer);
         if (watcherId && geo) geo.removeWatcher({ id: watcherId }).catch(() => {});
       };
     } else {

@@ -704,7 +704,11 @@ export default function RunView({
                 )}
               </span>
             ) : (
-              <span className="text-dust animate-pulse">Acquiring GPS…</span>
+              <span className="text-dust animate-pulse">
+                {gps.lastAccuracy != null
+                  ? `Acquiring GPS… signal ±${Math.round(gps.lastAccuracy)} m — locks at ≤20 m, open sky helps`
+                  : "Acquiring GPS… no fix yet"}
+              </span>
             )}
           </div>
         </div>
@@ -828,7 +832,9 @@ export default function RunView({
         {/* Status line */}
         <div className="mt-2 min-h-[20px]">
           {gps.status === "acquiring" && (
-            <span className="text-[11px] text-dust animate-pulse">Acquiring GPS…</span>
+            <span className="text-[11px] text-dust animate-pulse">
+              Acquiring GPS…{gps.lastAccuracy != null ? ` ±${Math.round(gps.lastAccuracy)} m` : " no fix yet"}
+            </span>
           )}
           {gps.status === "denied" && (
             <span className="text-[11px] text-ember">
