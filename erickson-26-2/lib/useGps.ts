@@ -15,7 +15,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LiveRunCheckpoint, RoutePoint } from "./storage";
-import { nativeGeo } from "./nativeBridge";
+import { isNativeApp, nativeGeo } from "./nativeBridge";
+import { noteTrapped } from "./errorTrap";
 
 // Drop fixes worse than this (m). Tighter than the old 25 m: on a track with
 // open sky the H10/phone usually reports 5–15 m, so 20 keeps the good ones
@@ -69,6 +70,10 @@ export interface GpsState {
   autoPaused: boolean;
   lastAccuracy: number | null; // m, from the most recent fix (signal sanity check)
   lastFixAt: number | null; // ms epoch of the most recent fix of any kind; null until first
+  // Which position source is live: "native" = background-capable foreground
+  // service (shell), "web" = watchPosition (browser, or the shell's fallback
+  // when the native watcher fails — screen-on only). Null until one starts.
+  source: "native" | "web" | null;
 }
 
 export interface GpsResult {
@@ -89,7 +94,8 @@ export function useGps(active: boolean) {
     paused: false,
     autoPaused: false,
     lastAccuracy: null,
-    lastFixAt: null
+    lastFixAt: null,
+    source: null
   });
 
   const ptsRef = useRef<Pt[]>([]);
@@ -112,6 +118,7 @@ export function useGps(active: boolean) {
   const pendingRef = useRef<{ lat: number; lng: number; alt: number | null; t: number } | null>(null);
   const lastAccuracyRef = useRef<number | null>(null);
   const lastFixAtRef = useRef<number | null>(null); // any fix arriving = we have signal
+  const sourceRef = useRef<"native" | "web" | null>(null);
   // Trace carried over from a crash-recovered run — merged ahead of the live
   // points when building the saved route (its `t` values are already relative).
   const restoredRouteRef = useRef<RoutePoint[]>([]);
@@ -156,7 +163,8 @@ export function useGps(active: boolean) {
       paused: pausedRef.current,
       autoPaused: autoPausedRef.current,
       lastAccuracy: lastAccuracyRef.current,
-      lastFixAt: lastFixAtRef.current
+      lastFixAt: lastFixAtRef.current,
+      source: sourceRef.current
     });
   }, [activeMs]);
 
@@ -268,6 +276,8 @@ export function useGps(active: boolean) {
         snapshot();
         return;
       }
+      sourceRef.current = "web";
+      snapshot();
       const watchId = navigator.geolocation.watchPosition(
         (pos) =>
           onFix(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, pos.coords.altitude),
@@ -315,19 +325,27 @@ export function useGps(active: boolean) {
           )
           .then((id) => {
             watcherId = id;
+            sourceRef.current = "native"; // watcher live: background-capable GPS
+            snapshot();
             if (removed) native.removeWatcher({ id }).catch(() => {});
           })
-          .catch(() => {
-            if (!removed) startWebWatch(); // plugin refused — degrade, don't die
+          .catch((e) => {
+            if (removed) return;
+            noteTrapped(`native GPS watcher rejected → web fallback: ${e?.message ?? e}`);
+            startWebWatch(); // plugin refused — degrade, don't die
           });
         stopSource = () => {
           removed = true;
           if (watcherId) native.removeWatcher({ id: watcherId }).catch(() => {});
         };
-      } catch {
+      } catch (e) {
+        noteTrapped(`native GPS watcher threw → web fallback: ${e instanceof Error ? e.message : e}`);
         startWebWatch(); // bridge call threw synchronously — degrade, don't die
       }
     } else {
+      // In the shell this means the plugin never made it onto the bridge —
+      // the run still tracks (screen-on), but flag it so we know to fix it.
+      if (isNativeApp()) noteTrapped("native GPS plugin unavailable in shell → web fallback");
       startWebWatch();
     }
 

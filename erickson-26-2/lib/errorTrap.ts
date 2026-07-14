@@ -48,6 +48,12 @@ function record(msg: string, stack?: string) {
   }
 }
 
+// Log a notable non-crash event (e.g. "native GPS failed, fell back to web")
+// into the same trap so Sensor check surfaces silent degradations too.
+export function noteTrapped(msg: string) {
+  record(`[event] ${msg}`);
+}
+
 let installed = false;
 
 export function installErrorTrap() {

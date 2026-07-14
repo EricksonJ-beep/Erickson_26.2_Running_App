@@ -16,6 +16,7 @@ import {
   getProfile, addRun, clearLiveRun, saveLiveRun, LiveRunCheckpoint, RecoveryTest
 } from "@/lib/storage";
 import { hrr1BandInfo } from "@/lib/recovery";
+import { isNativeApp } from "@/lib/nativeBridge";
 import RouteMap, { elevationStats } from "./RouteMap";
 import RecoveryTestView from "./RecoveryTestView";
 
@@ -691,7 +692,17 @@ export default function RunView({
                 Location denied — enable it in site settings.
               </span>
             ) : gpsReady ? (
-              <span className="text-sage">● GPS locked{gps.lastAccuracy != null ? ` · ±${Math.round(gps.lastAccuracy)} m` : ""}</span>
+              <span className="text-sage">
+                ● GPS locked{gps.lastAccuracy != null ? ` · ±${Math.round(gps.lastAccuracy)} m` : ""}
+                {/* In the shell, say which source is live: the whole point of the
+                    native app is "native" here — "screen-on" means the plugin
+                    fell back and pocket-tracking is off. */}
+                {isNativeApp() && gps.source && (
+                  <span className={gps.source === "native" ? "text-sage" : "text-ember"}>
+                    {gps.source === "native" ? " · pocket-safe ✓" : " · screen-on only"}
+                  </span>
+                )}
+              </span>
             ) : (
               <span className="text-dust animate-pulse">Acquiring GPS…</span>
             )}
@@ -837,6 +848,13 @@ export default function RunView({
               className={`text-[11px] ml-2 ${gps.lastAccuracy <= 12 ? "text-dust" : "text-ember"}`}
             >
               GPS ±{Math.round(gps.lastAccuracy)} m
+            </span>
+          )}
+          {isNativeApp() && gps.source && (
+            <span
+              className={`text-[11px] ml-2 ${gps.source === "native" ? "text-sage" : "text-ember"}`}
+            >
+              {gps.source === "native" ? "pocket-safe ✓" : "⚠ screen-on GPS only"}
             </span>
           )}
         </div>
