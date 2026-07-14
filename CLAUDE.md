@@ -188,6 +188,20 @@ another run" (won't overwrite; a hint says so); history rows key/edit/delete by 
 `[[project_multi_run_per_day]]`.
 
 ## In Progress / Next Up
+- [x] **Session Jul 14 2026 — shipped: Capacitor Milestone 2 (native BLE heart rate).** The H10 now
+      pairs inside the native shell (Web Bluetooth doesn't exist there). `useHeartRate` refactored to
+      two transports behind one identical API — browser = hand-rolled Web Bluetooth (unchanged),
+      native = `@capacitor-community/bluetooth-le@8.2.0`, both funneling every reading through a shared
+      `onSample(hr)`. Plugin is **lazy-loaded** (`import()` gated on `isNativeApp()`) so the web bundle
+      stays free of @capacitor/* code and the PWA's HR path is byte-for-byte the same. Manifest got
+      `BLUETOOTH_SCAN`/`_CONNECT` (+ legacy capped at API 30) + the BLE feature. tsc + web build clean.
+      **M1 recap:** APK `android-v0.1.1` was signed (Jon added `KEYSTORE_PASSWORD`), released, and
+      installed — background-GPS validation run still pending. **M2 needs a fresh APK** (`android-v0.2.0`,
+      native plugin added) → Jon sideloads, validates strap + background GPS, then migrates data
+      (Export→Import) and switches daily drivers. Then M3 (TTS ducking), M4 (polish + branded icon —
+      Jon wants the lime-runner icon set at switch-over, not before). Note: the native app's webview
+      localStorage is **separate** from the Chrome PWA's — Jon's runs are safe in the PWA; the one-time
+      Export→Import migration happens at switch-over.
 - [x] **Session Jul 9 2026 — shipped (2): Capacitor native shell, Milestone 1 (approved by Jon).**
       Full 4-milestone plan in `docs/PHASE2_BACKGROUND_GPS.md`; **M1 built + CI green same day**:
       Capacitor 8 `android/` project in **remote-URL mode** (webview loads the live Vercel app →

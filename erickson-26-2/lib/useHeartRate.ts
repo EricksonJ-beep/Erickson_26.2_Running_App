@@ -1,16 +1,23 @@
 "use client";
 
-// Live heart rate over Web Bluetooth (standard Heart Rate Service,
-// 0x180D / characteristic 0x2A37). The Polar H10 advertises this
-// standard service, so no vendor code is needed. Bluetooth requires a
-// secure context — HTTPS in production, or `npm run dev` on localhost.
+// Live heart rate over Bluetooth (standard Heart Rate Service, 0x180D /
+// characteristic 0x2A37 — the Polar H10 advertises it, so no vendor code).
 //
-// Chrome on Android supports this; where navigator.bluetooth is absent
-// (iOS, desktop Safari) the hook reports supported: false and stays inert.
+// Two transports behind one identical API:
+//   • Browser / PWA  → Web Bluetooth (navigator.bluetooth). Chrome/Android
+//     only; iOS/desktop Safari report supported:false and stay inert.
+//   • Native Android shell → @capacitor-community/bluetooth-le, so HR works
+//     inside the Capacitor app (which has no Web Bluetooth) and keeps
+//     streaming with the screen off. The plugin module is loaded lazily and
+//     only on-device, so the web bundle never imports any @capacitor/* code.
+//
+// Both transports funnel every reading through onSample(hr); all the
+// accumulation, zone, and rolling-window math is written exactly once.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { computeZones } from "./zones";
 import { getProfile } from "./storage";
+import { isNativeApp } from "./nativeBridge";
 
 // lib.dom carries no Web Bluetooth types and new @types deps are off
 // the table, so declare the minimal slice used here.
@@ -35,6 +42,11 @@ interface BTApi {
   requestDevice(options: { filters: { services: string[] }[] }): Promise<BTDevice>;
 }
 
+// Full 128-bit UUIDs for the native plugin (Web Bluetooth accepts the short
+// "heart_rate" aliases; the BLE-LE plugin wants the expanded form).
+const HR_SERVICE = "0000180d-0000-1000-8000-00805f9b34fb";
+const HR_MEASUREMENT = "00002a37-0000-1000-8000-00805f9b34fb";
+
 // Auto-reconnect backoff (ms). The last value repeats — we keep retrying a
 // dropped strap for the whole run instead of giving up after a few tries, so a
 // brief out-of-range moment or a sweat/contact blip doesn't kill HR for good.
@@ -47,18 +59,30 @@ function parseHeartRate(value: DataView): number {
   return flags & 0x1 ? value.getUint16(1, true) : value.getUint8(1);
 }
 
+// Lazy handle to the native BLE plugin (only ever loaded inside the shell).
+type BleClientType = typeof import("@capacitor-community/bluetooth-le").BleClient;
+let blePromise: Promise<BleClientType> | null = null;
+function bleClient(): Promise<BleClientType> {
+  if (!blePromise) {
+    blePromise = import("@capacitor-community/bluetooth-le").then((m) => m.BleClient);
+  }
+  return blePromise;
+}
+
 export type HRStatus = "idle" | "connecting" | "connected" | "lost";
 
 export function useHeartRate() {
+  const native = isNativeApp();
   const supported =
-    typeof navigator !== "undefined" && "bluetooth" in navigator;
+    native || (typeof navigator !== "undefined" && "bluetooth" in navigator);
 
   const [status, setStatus] = useState<HRStatus>("idle");
   const [bpm, setBpm] = useState<number | null>(null);
   const [deviceName, setDeviceName] = useState<string | null>(null);
 
-  const deviceRef = useRef<BTDevice | null>(null);
-  const charRef = useRef<BTCharacteristic | null>(null); // for clean listener teardown
+  const deviceRef = useRef<BTDevice | null>(null); // web transport
+  const charRef = useRef<BTCharacteristic | null>(null); // web: clean listener teardown
+  const nativeIdRef = useRef<string | null>(null); // native transport: deviceId
   const zonesRef = useRef(computeZones(typeof window === "undefined" ? {} : getProfile()));
   const zoneSecondsRef = useRef([0, 0, 0, 0, 0]);
   const weightedSumRef = useRef(0); // Σ bpm·dt for time-weighted average
@@ -73,6 +97,9 @@ export function useHeartRate() {
   const genRef = useRef(0);
   const reconnectGenRef = useRef(0);
   const closedRef = useRef(false);
+  // Native disconnect handler, held in a ref so the notification/connect
+  // callbacks can reach the latest one without a definition cycle.
+  const onNativeDropRef = useRef<() => void>(() => {});
 
   const zoneOf = useCallback((hr: number): number | null => {
     const zones = zonesRef.current;
@@ -83,11 +110,9 @@ export function useHeartRate() {
     return null;
   }, []);
 
-  const onMeasurement = useCallback(
-    (event: Event) => {
-      const value = (event.target as BTCharacteristic).value;
-      if (!value) return;
-      const hr = parseHeartRate(value);
+  // Shared sample pipeline — every reading from either transport lands here.
+  const onSample = useCallback(
+    (hr: number) => {
       if (hr < 30 || hr > 230) return; // sensor glitch
       const now = Date.now();
       const dt = lastSampleRef.current
@@ -107,6 +132,15 @@ export function useHeartRate() {
       setBpm(hr);
     },
     [zoneOf]
+  );
+
+  const onMeasurement = useCallback(
+    (event: Event) => {
+      const value = (event.target as BTCharacteristic).value;
+      if (!value) return;
+      onSample(parseHeartRate(value));
+    },
+    [onSample]
   );
 
   // Rolling-average HR over the last `windowSec` seconds, plus spread (max−min)
@@ -157,7 +191,8 @@ export function useHeartRate() {
     []
   );
 
-  const subscribe = useCallback(
+  // ── Web Bluetooth transport ──
+  const subscribeWeb = useCallback(
     async (device: BTDevice) => {
       const server = await device.gatt!.connect();
       const service = await server.getPrimaryService("heart_rate");
@@ -174,8 +209,24 @@ export function useHeartRate() {
     [onMeasurement]
   );
 
+  // ── Native BLE transport ──
+  const subscribeNative = useCallback(
+    async (deviceId: string) => {
+      const BleClient = await bleClient();
+      await BleClient.connect(deviceId, () => onNativeDropRef.current());
+      await BleClient.startNotifications(deviceId, HR_SERVICE, HR_MEASUREMENT, (value) =>
+        onSample(parseHeartRate(value))
+      );
+      reconnectsRef.current = 0;
+      setStatus("connected");
+    },
+    [onSample]
+  );
+
+  const subscribe = native ? subscribeNative : subscribeWeb;
+
   // Strap dropped: keep retrying the known device with backoff for the whole
-  // run (the last delay repeats). One loop at a time, guarded by reconnectingRef.
+  // run (the last delay repeats). One loop at a time, guarded by generation.
   const handleDisconnect = useCallback(async () => {
     if (closedRef.current) return;
     const gen = genRef.current;
@@ -183,31 +234,68 @@ export function useHeartRate() {
     reconnectGenRef.current = gen;
     setStatus("lost");
     setBpm(null);
-    const device = deviceRef.current;
-    while (device && !closedRef.current && genRef.current === gen) {
+    const hasDevice = native ? nativeIdRef.current !== null : deviceRef.current !== null;
+    while (hasDevice && !closedRef.current && genRef.current === gen) {
       const delay = RECONNECT_DELAYS_MS[Math.min(reconnectsRef.current, RECONNECT_DELAYS_MS.length - 1)];
       reconnectsRef.current++;
       await new Promise((r) => setTimeout(r, delay));
       if (closedRef.current || genRef.current !== gen) break;
       try {
-        await subscribe(device); // resets the backoff on success
-        if (genRef.current !== gen) { // re-paired to a new device mid-attempt — drop this stale one
-          try { device.gatt?.disconnect(); } catch { /* ignore */ }
-          break;
+        if (native) {
+          if (nativeIdRef.current) await subscribeNative(nativeIdRef.current);
+        } else if (deviceRef.current) {
+          await subscribeWeb(deviceRef.current); // resets the backoff on success
         }
+        if (genRef.current !== gen) break; // re-paired to a new device mid-attempt
         break;
       } catch {
         // strap still out of range — keep backing off and retrying
       }
     }
     if (reconnectGenRef.current === gen) reconnectGenRef.current = 0; // release only if still ours
-  }, [subscribe]);
+  }, [native, subscribeNative, subscribeWeb]);
 
-  // Full (re-)pair: opens the device chooser. Must run inside a user gesture
-  // per the Web Bluetooth spec. Tears down any prior device first so the user
-  // can force a clean re-pair mid-run even while it shows "connected".
+  // Keep the native disconnect callback pointing at the latest handler.
+  useEffect(() => {
+    onNativeDropRef.current = handleDisconnect;
+  }, [handleDisconnect]);
+
+  // Full (re-)pair: opens the device chooser. Tears down any prior device
+  // first so the user can force a clean re-pair mid-run even while "connected".
   const connect = useCallback(async () => {
     if (!supported) return;
+    closedRef.current = false; // revive the reconnect machinery
+    reconnectsRef.current = 0;
+    genRef.current++; // new generation — abandon any stale reconnect loop from the old device
+    const gen = genRef.current;
+
+    if (native) {
+      try {
+        setStatus("connecting");
+        const BleClient = await bleClient();
+        await BleClient.initialize();
+        // Drop a prior strap so a mid-run re-pair is clean.
+        const prevId = nativeIdRef.current;
+        if (prevId) {
+          try {
+            await BleClient.stopNotifications(prevId, HR_SERVICE, HR_MEASUREMENT);
+            await BleClient.disconnect(prevId);
+          } catch {
+            // already gone — ignore
+          }
+        }
+        const device = await BleClient.requestDevice({ services: [HR_SERVICE] });
+        if (genRef.current !== gen) return; // superseded by a newer connect()
+        nativeIdRef.current = device.deviceId;
+        setDeviceName(device.name ?? "HR strap");
+        await subscribeNative(device.deviceId);
+      } catch {
+        setStatus(nativeIdRef.current ? "lost" : "idle");
+      }
+      return;
+    }
+
+    // Web transport
     const prev = deviceRef.current;
     if (prev) {
       try {
@@ -218,9 +306,6 @@ export function useHeartRate() {
       }
     }
     charRef.current = null;
-    closedRef.current = false; // revive the reconnect machinery
-    reconnectsRef.current = 0;
-    genRef.current++; // new generation — abandon any stale reconnect loop from the old device
     try {
       setStatus("connecting");
       const bt = (navigator as Navigator & { bluetooth: BTApi }).bluetooth;
@@ -228,40 +313,70 @@ export function useHeartRate() {
       deviceRef.current = device;
       setDeviceName(device.name ?? "HR strap");
       device.addEventListener("gattserverdisconnected", handleDisconnect);
-      await subscribe(device);
+      await subscribeWeb(device);
     } catch {
       // user dismissed the chooser, or connect failed
       setStatus(deviceRef.current ? "lost" : "idle");
     }
-  }, [supported, subscribe, handleDisconnect]);
+  }, [supported, native, subscribeNative, subscribeWeb, handleDisconnect]);
 
   // One-tap recovery: re-subscribe the already-paired strap without reopening
   // the chooser. Falls back to a full pair if no device is known yet.
   const reconnect = useCallback(async () => {
+    closedRef.current = false;
+    if (native) {
+      if (!nativeIdRef.current) return connect();
+      setStatus("connecting");
+      try {
+        await subscribeNative(nativeIdRef.current);
+      } catch {
+        handleDisconnect();
+      }
+      return;
+    }
     const device = deviceRef.current;
     if (!device) return connect();
-    closedRef.current = false;
     setStatus("connecting");
     try {
-      await subscribe(device);
+      await subscribeWeb(device);
     } catch {
       handleDisconnect(); // drop into the backoff retry loop
     }
-  }, [connect, subscribe, handleDisconnect]);
+  }, [native, connect, subscribeNative, subscribeWeb, handleDisconnect]);
 
   const disconnect = useCallback(() => {
     closedRef.current = true;
+    if (native) {
+      const id = nativeIdRef.current;
+      if (id) {
+        bleClient().then((BleClient) => {
+          BleClient.stopNotifications(id, HR_SERVICE, HR_MEASUREMENT).catch(() => {});
+          BleClient.disconnect(id).catch(() => {});
+        });
+      }
+      return;
+    }
     try {
       charRef.current?.removeEventListener("characteristicvaluechanged", onMeasurement);
     } catch {
       // ignore
     }
     deviceRef.current?.gatt?.disconnect();
-  }, [onMeasurement]);
+  }, [native, onMeasurement]);
 
   useEffect(() => {
     return () => {
       closedRef.current = true;
+      if (native) {
+        const id = nativeIdRef.current;
+        if (id) {
+          bleClient().then((BleClient) => {
+            BleClient.stopNotifications(id, HR_SERVICE, HR_MEASUREMENT).catch(() => {});
+            BleClient.disconnect(id).catch(() => {});
+          });
+        }
+        return;
+      }
       try {
         charRef.current?.removeEventListener("characteristicvaluechanged", onMeasurement);
       } catch {
@@ -269,7 +384,7 @@ export function useHeartRate() {
       }
       deviceRef.current?.gatt?.disconnect();
     };
-  }, [onMeasurement]);
+  }, [native, onMeasurement]);
 
   const avgBpm =
     weightSecRef.current > 0

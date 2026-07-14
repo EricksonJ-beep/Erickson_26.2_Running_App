@@ -1,9 +1,11 @@
 # Phase 2 — Native Android Shell (Capacitor): Full Build Plan
 
-> Status: **approved by Jon Jul 9 2026 — Milestone 1 BUILT the same day** (CI
-> green, first APK produced). Remaining: Jon adds the `KEYSTORE_PASSWORD`
-> secret → rebuild → sideload → first real device run. M2 (BLE HR), M3
-> (ducking), M4 (polish) not started.
+> Status: **M1 + M2 BUILT** (Jul 9 shell/background-GPS; Jul 14 native BLE HR).
+> M1 APK signed + released (`android-v0.1.1`) and installed on Jon's phone.
+> M2 (native strap) built + web-verified, APK pending (`android-v0.2.0`).
+> Remaining: Jon sideloads the M2 APK, validates strap + background GPS on a
+> real run, then migrates data (Export→Import) and switches daily drivers.
+> M3 (TTS ducking), M4 (polish, incl. branded launcher icon) not started.
 >
 > Trigger: the Jul 8 lost run proved the browser ceiling is real — wake lock +
 > lock overlay can't survive a screen-off + process kill. Checkpointing (shipped
@@ -68,13 +70,20 @@ The smallest shippable unit that fixes the Jul 8 failure.
   distance/route/splits complete, zero gap; notification visible throughout;
   crash-recovery checkpointing still works underneath.
 
-## Milestone 2 — Native BLE heart rate
+## Milestone 2 — Native BLE heart rate ✅ BUILT (Jul 14 2026)
 
-- `@capacitor-community/bluetooth-le` behind a `useHeartRate` adapter exposing
-  the exact current API (status / bpm / recentSample / sampleAt / reconnect /
-  totals). Same standard HR service (0x180D/0x2A37), same parsing, same
-  reconnect-generation logic.
+- `@capacitor-community/bluetooth-le@8.2.0` behind the same `useHeartRate`
+  adapter (status / bpm / recentSample / sampleAt / totals / restoreTotals /
+  connect / reconnect / disconnect — unchanged surface). Same standard HR
+  service (0x180D/0x2A37), same `parseHeartRate`, same reconnect-generation
+  logic. Both transports funnel through one shared `onSample(hr)` pipeline.
+- The plugin is **lazy-loaded** (`import()` inside `bleClient()`, gated on
+  `isNativeApp()`), so the web bundle never pulls in any @capacitor/* code —
+  the browser PWA keeps its hand-rolled Web Bluetooth path untouched.
+- Manifest: `BLUETOOTH_SCAN` + `BLUETOOTH_CONNECT` (+ legacy `BLUETOOTH`/
+  `_ADMIN` capped at API 30), `bluetooth_le` feature.
 - HR keeps streaming with the screen off (rides Milestone 1's service).
+- **Needs a new APK** (native plugin added) — build `android-v0.2.0`.
 - **Acceptance:** pair the H10, run with screen-off stretches — `zoneSeconds`,
   avg HR, drift alerts, and the post-run HRR test all complete; mid-run strap
   dropout reconnects.
