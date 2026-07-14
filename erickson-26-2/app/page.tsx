@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { todayISO } from "@/lib/plan";
 import { applySeed, requestPersistence } from "@/lib/storage";
+import { installErrorTrap } from "@/lib/errorTrap";
 import TodayView from "@/components/TodayView";
 import PlanView from "@/components/PlanView";
 import LogView from "@/components/LogView";
@@ -37,6 +38,7 @@ export default function Home() {
   // Re-key the views when the date changes so they remount fresh.
   const [day, setDay] = useState("");
   useEffect(() => {
+    installErrorTrap(); // record any crash so Sensor check can show it after the fact
     applySeed(); // fold in any runs Jon reported via chat
     requestPersistence(); // ask the browser not to evict our localStorage — no backend to fall back on
     setDay(todayISO());

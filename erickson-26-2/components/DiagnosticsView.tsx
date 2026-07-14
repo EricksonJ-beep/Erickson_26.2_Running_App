@@ -10,6 +10,8 @@ import { computeZones } from "@/lib/zones";
 import { getProfile } from "@/lib/storage";
 import { useHeartRate } from "@/lib/useHeartRate";
 import { useWakeLock } from "@/lib/useWakeLock";
+import { getTrappedErrors, clearTrappedErrors, TrappedError } from "@/lib/errorTrap";
+import { isNativeApp } from "@/lib/nativeBridge";
 
 const METERS_PER_MILE = 1609.344;
 
@@ -350,8 +352,67 @@ export default function DiagnosticsView({ onClose }: { onClose: () => void }) {
               </p>
             )}
           </div>
+
+          {/* Crash log — errors trapped by lib/errorTrap, for field debugging */}
+          <ErrorLogCard />
         </div>
       </div>
+    </div>
+  );
+}
+
+// Recent trapped errors + the exact browser/webview build. When something
+// fails on the phone mid-field ("this page couldn't load"), this card is how
+// the actual exception gets read back after the fact.
+function ErrorLogCard() {
+  const [errors, setErrors] = useState<TrappedError[]>([]);
+  const [ua, setUa] = useState("");
+  const [native, setNative] = useState(false);
+  useEffect(() => {
+    setErrors(getTrappedErrors());
+    setUa(navigator.userAgent);
+    setNative(isNativeApp());
+  }, []);
+
+  return (
+    <div className="bg-coal rounded-2xl border border-seam p-5">
+      <div className="flex items-center justify-between">
+        <h2 className="font-display font-bold text-lg text-bone">Crash log</h2>
+        <StatusPill tone={errors.length ? "bad" : "good"} label={errors.length ? `${errors.length} caught` : "Clean"} />
+      </div>
+
+      {errors.length === 0 ? (
+        <p className="text-sm text-dust mt-3">No errors recorded on this device.</p>
+      ) : (
+        <div className="mt-3 space-y-2">
+          {errors.map((e, i) => (
+            <div key={i} className="bg-ink rounded-lg px-3 py-2">
+              <div className="text-[10px] text-dust tabular-nums">
+                {new Date(e.at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+              </div>
+              <div className="text-xs text-ember leading-snug break-words mt-0.5">{e.msg}</div>
+              {e.stack && (
+                <div className="text-[10px] text-dust leading-snug break-words mt-1 max-h-24 overflow-y-auto whitespace-pre-wrap">
+                  {e.stack}
+                </div>
+              )}
+            </div>
+          ))}
+          <button
+            onClick={() => {
+              clearTrappedErrors();
+              setErrors([]);
+            }}
+            className="w-full py-2 text-xs text-dust border border-seam rounded-lg"
+          >
+            Clear log
+          </button>
+        </div>
+      )}
+
+      <p className="text-[10px] text-dust mt-3 leading-snug break-words">
+        {native ? "Native app" : "Browser"} · {ua}
+      </p>
     </div>
   );
 }

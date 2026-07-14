@@ -54,12 +54,23 @@ function bridge(): CapacitorBridge | null {
 
 // True only inside the native Android shell (never in a browser/PWA).
 export function isNativeApp(): boolean {
-  return bridge()?.isNativePlatform?.() === true;
+  try {
+    return bridge()?.isNativePlatform?.() === true;
+  } catch {
+    return false;
+  }
 }
 
 // The native background-GPS plugin, or null (browser, or shell misconfigured).
-// Callers should fall back to web geolocation on null.
+// Callers should fall back to web geolocation on null. try/catch because
+// `Capacitor.Plugins` may be a proxy that throws on unknown names in some
+// bridge builds — a missing plugin must degrade, never crash Run Mode.
 export function nativeGeo(): BackgroundGeolocationPlugin | null {
-  if (!isNativeApp()) return null;
-  return bridge()?.Plugins?.BackgroundGeolocation ?? null;
+  try {
+    if (!isNativeApp()) return null;
+    const geo = bridge()?.Plugins?.BackgroundGeolocation ?? null;
+    return geo && typeof geo.addWatcher === "function" ? geo : null;
+  } catch {
+    return null;
+  }
 }

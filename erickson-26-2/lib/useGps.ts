@@ -259,47 +259,15 @@ export function useGps(active: boolean) {
     const ticker = window.setInterval(snapshot, 1000);
     let stopSource: (() => void) | undefined;
 
-    const native = nativeGeo();
-    if (native) {
-      // Native Android shell: the plugin's foreground service keeps fixes
-      // flowing with the screen off / phone pocketed — the reason the shell
-      // exists. The notification text below is what Android pins during runs.
-      let removed = false;
-      let watcherId: string | null = null;
-      native
-        .addWatcher(
-          {
-            backgroundTitle: "Run in progress",
-            backgroundMessage: "Tracking your run — GPS stays on with the screen off.",
-            requestPermissions: true,
-            stale: false, // never seed from a cached last-known fix
-            distanceFilter: 0 // every fix; our own gates do the filtering
-          },
-          (position, error) => {
-            if (error) {
-              if (error.code === "NOT_AUTHORIZED") {
-                statusRef.current = "denied";
-                snapshot();
-              }
-              return; // other errors: keep watching — signal often returns
-            }
-            if (!position || position.simulated) return;
-            onFix(position.latitude, position.longitude, position.accuracy, position.altitude);
-          }
-        )
-        .then((id) => {
-          watcherId = id;
-          if (removed) native.removeWatcher({ id }).catch(() => {});
-        })
-        .catch(() => {
-          statusRef.current = "denied";
-          snapshot();
-        });
-      stopSource = () => {
-        removed = true;
-        if (watcherId) native.removeWatcher({ id: watcherId }).catch(() => {});
-      };
-    } else if (typeof navigator !== "undefined" && navigator.geolocation) {
+    // Web position source — the browser path, and the fallback if the native
+    // watcher fails for any reason (missing plugin, bridge error): a run with
+    // screen-on GPS beats a run that can't start.
+    const startWebWatch = () => {
+      if (typeof navigator === "undefined" || !navigator.geolocation) {
+        statusRef.current = "unsupported";
+        snapshot();
+        return;
+      }
       const watchId = navigator.geolocation.watchPosition(
         (pos) =>
           onFix(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, pos.coords.altitude),
@@ -313,9 +281,54 @@ export function useGps(active: boolean) {
         { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
       );
       stopSource = () => navigator.geolocation.clearWatch(watchId);
+    };
+
+    const native = nativeGeo();
+    if (native) {
+      // Native Android shell: the plugin's foreground service keeps fixes
+      // flowing with the screen off / phone pocketed — the reason the shell
+      // exists. The notification text below is what Android pins during runs.
+      // Any failure here degrades to the web watcher instead of erroring out.
+      let removed = false;
+      let watcherId: string | null = null;
+      try {
+        native
+          .addWatcher(
+            {
+              backgroundTitle: "Run in progress",
+              backgroundMessage: "Tracking your run — GPS stays on with the screen off.",
+              requestPermissions: true,
+              stale: false, // never seed from a cached last-known fix
+              distanceFilter: 0 // every fix; our own gates do the filtering
+            },
+            (position, error) => {
+              if (error) {
+                if (error.code === "NOT_AUTHORIZED") {
+                  statusRef.current = "denied";
+                  snapshot();
+                }
+                return; // other errors: keep watching — signal often returns
+              }
+              if (!position || position.simulated) return;
+              onFix(position.latitude, position.longitude, position.accuracy, position.altitude);
+            }
+          )
+          .then((id) => {
+            watcherId = id;
+            if (removed) native.removeWatcher({ id }).catch(() => {});
+          })
+          .catch(() => {
+            if (!removed) startWebWatch(); // plugin refused — degrade, don't die
+          });
+        stopSource = () => {
+          removed = true;
+          if (watcherId) native.removeWatcher({ id: watcherId }).catch(() => {});
+        };
+      } catch {
+        startWebWatch(); // bridge call threw synchronously — degrade, don't die
+      }
     } else {
-      statusRef.current = "unsupported";
-      snapshot();
+      startWebWatch();
     }
 
     return () => {
