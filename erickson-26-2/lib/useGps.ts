@@ -15,7 +15,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LiveRunCheckpoint, RoutePoint } from "./storage";
-import { isNativeApp, nativeGeo } from "./nativeBridge";
+import { isNativeApp, loadNativeGeo, BackgroundGeolocationPlugin } from "./nativeBridge";
 import { noteTrapped } from "./errorTrap";
 
 // Drop fixes worse than this (m). Tighter than the old 25 m: on a track with
@@ -293,15 +293,22 @@ export function useGps(active: boolean) {
       stopSource = () => navigator.geolocation.clearWatch(watchId);
     };
 
-    const native = nativeGeo();
-    if (native) {
+    if (isNativeApp()) {
       // Native Android shell: the plugin's foreground service keeps fixes
       // flowing with the screen off / phone pocketed — the reason the shell
-      // exists. The notification text below is what Android pins during runs.
-      // Any failure here degrades to the web watcher instead of erroring out.
+      // exists. The plugin JS loads lazily (same mechanism as the BLE HR
+      // transport); any failure degrades to the web watcher instead of dying.
       let removed = false;
       let watcherId: string | null = null;
-      try {
+      let geo: BackgroundGeolocationPlugin | null = null;
+      loadNativeGeo().then((native) => {
+        if (removed) return;
+        if (!native) {
+          noteTrapped("native GPS plugin failed to load → web fallback");
+          startWebWatch();
+          return;
+        }
+        geo = native;
         native
           .addWatcher(
             {
@@ -334,18 +341,12 @@ export function useGps(active: boolean) {
             noteTrapped(`native GPS watcher rejected → web fallback: ${e?.message ?? e}`);
             startWebWatch(); // plugin refused — degrade, don't die
           });
-        stopSource = () => {
-          removed = true;
-          if (watcherId) native.removeWatcher({ id: watcherId }).catch(() => {});
-        };
-      } catch (e) {
-        noteTrapped(`native GPS watcher threw → web fallback: ${e instanceof Error ? e.message : e}`);
-        startWebWatch(); // bridge call threw synchronously — degrade, don't die
-      }
+      });
+      stopSource = () => {
+        removed = true;
+        if (watcherId && geo) geo.removeWatcher({ id: watcherId }).catch(() => {});
+      };
     } else {
-      // In the shell this means the plugin never made it onto the bridge —
-      // the run still tracks (screen-on), but flag it so we know to fix it.
-      if (isNativeApp()) noteTrapped("native GPS plugin unavailable in shell → web fallback");
       startWebWatch();
     }
 

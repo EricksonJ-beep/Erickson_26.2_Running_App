@@ -44,7 +44,6 @@ export interface BackgroundGeolocationPlugin {
 interface CapacitorBridge {
   isNativePlatform?: () => boolean;
   getPlatform?: () => string;
-  Plugins?: { BackgroundGeolocation?: BackgroundGeolocationPlugin };
 }
 
 function bridge(): CapacitorBridge | null {
@@ -61,16 +60,24 @@ export function isNativeApp(): boolean {
   }
 }
 
-// The native background-GPS plugin, or null (browser, or shell misconfigured).
-// Callers should fall back to web geolocation on null. try/catch because
-// `Capacitor.Plugins` may be a proxy that throws on unknown names in some
-// bridge builds — a missing plugin must degrade, never crash Run Mode.
-export function nativeGeo(): BackgroundGeolocationPlugin | null {
-  try {
-    if (!isNativeApp()) return null;
-    const geo = bridge()?.Plugins?.BackgroundGeolocation ?? null;
-    return geo && typeof geo.addWatcher === "function" ? geo : null;
-  } catch {
-    return null;
+// The native background-GPS plugin, or null (browser, or load failure —
+// callers fall back to web geolocation on null).
+//
+// @capacitor-community/background-geolocation ships NO JavaScript — only the
+// native implementation plus type definitions. Its documented usage is to
+// call registerPlugin("BackgroundGeolocation") yourself. That's why the
+// injected `window.Capacitor.Plugins` proxy never exposed it (field-tested
+// Jul 14: GPS silently fell back to screen-on web tracking) — nothing had
+// registered it. registerPlugin comes from a lazy import of @capacitor/core,
+// the same mechanism the BLE HR transport uses (proven on device); gated on
+// isNativeApp(), so the PWA never fetches the chunk.
+let geoPromise: Promise<BackgroundGeolocationPlugin | null> | null = null;
+export function loadNativeGeo(): Promise<BackgroundGeolocationPlugin | null> {
+  if (!isNativeApp()) return Promise.resolve(null);
+  if (!geoPromise) {
+    geoPromise = import("@capacitor/core")
+      .then((m) => m.registerPlugin<BackgroundGeolocationPlugin>("BackgroundGeolocation"))
+      .catch(() => null);
   }
+  return geoPromise;
 }
