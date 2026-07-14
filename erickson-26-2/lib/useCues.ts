@@ -12,6 +12,35 @@
 // and speech are configurable.
 
 import { useCallback, useEffect, useRef } from "react";
+import { isNativeApp } from "./nativeBridge";
+
+// Native TTS (shell only): Android's speech engine takes transient audio
+// focus, so cues duck Spotify and hand the volume back — the thing Web Speech
+// can never do. Same lazy-load + wrapper pattern as GPS/BLE: the import is
+// gated on isNativeApp() (the PWA never fetches the chunk), and we never
+// resolve a promise with the raw registerPlugin proxy — its thenable probe
+// becomes a bogus native call ("TextToSpeech.then() is not implemented").
+interface NativeTTS {
+  speak(o: { text: string; lang?: string; rate?: number; volume?: number }): Promise<void>;
+  stop(): Promise<void>;
+}
+let ttsPromise: Promise<NativeTTS | null> | null = null;
+function loadNativeTTS(): Promise<NativeTTS | null> {
+  if (!isNativeApp()) return Promise.resolve(null);
+  if (!ttsPromise) {
+    ttsPromise = import("@capacitor-community/text-to-speech")
+      .then((m) => {
+        const proxy = m.TextToSpeech;
+        const wrapped: NativeTTS = {
+          speak: (o) => Promise.resolve(proxy.speak(o)),
+          stop: () => Promise.resolve(proxy.stop())
+        };
+        return wrapped;
+      })
+      .catch(() => null);
+  }
+  return ttsPromise;
+}
 
 export interface CueOptions {
   alertGain?: number; // WebAudio peak gain for an "alert" tone
@@ -80,9 +109,10 @@ export function useCues(
   );
 
   // Raw TTS. Best-effort; re-checks mute at speak time (a cue speaks ~240 ms
-  // later, so muting in that window should still suppress the line).
-  const speak = useCallback((text: string) => {
-    if (mutedRef.current) return;
+  // later, so muting in that window should still suppress the line). In the
+  // native shell the line goes through Android TTS (ducks music); the browser
+  // keeps Web Speech; native failure falls back to Web Speech.
+  const webSpeak = useCallback((text: string) => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
     try {
       const u = new SpeechSynthesisUtterance(text);
@@ -94,6 +124,29 @@ export function useCues(
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const speak = useCallback(
+    (text: string) => {
+      if (mutedRef.current) return;
+      if (isNativeApp()) {
+        loadNativeTTS().then((tts) => {
+          if (!tts) return webSpeak(text);
+          tts
+            .speak({
+              text,
+              lang: "en-US",
+              rate: cfgRef.current.speechRate,
+              volume: cfgRef.current.speechVolume
+            })
+            .catch(() => webSpeak(text));
+        });
+        return;
+      }
+      webSpeak(text);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    },
+    [webSpeak]
+  );
 
   // Tone lands first, spoken line a beat later so it isn't stepped on. "alert"
   // reads more urgent than a routine "info" update.
@@ -120,6 +173,7 @@ export function useCues(
       } catch {
         // ignore
       }
+      if (ttsPromise) ttsPromise.then((t) => t?.stop().catch(() => {}));
     };
   }, []);
 
