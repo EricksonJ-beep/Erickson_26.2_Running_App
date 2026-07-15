@@ -67,7 +67,9 @@ Single page, four bottom tabs (`app/page.tsx`): **Today · Plan · Log · Progre
   workout's goal band, both-direction HR drift alerts (25 s debounce, 3 min warmup hold), plus
   spoken "Heart rate signal lost/reconnected" and "GPS signal lost/back" (`GPS_STALE_MS` 12 s via
   `useGps.lastFixAt`). Tones are loud (alert/info gain 0.9/0.55) to punch through music — a browser
-  PWA can't actually duck Spotify (no audio focus; needs the native shell). **Mid-run HR re-pair:**
+  PWA can't actually duck Spotify — but the **native app speaks via Android TTS with audio focus
+  (`useCues` → `@capacitor-community/text-to-speech`), so cues duck music there** (M3, Jul 14).
+  **Mid-run HR re-pair:**
   `useHeartRate` auto-reconnects all run long (backoff caps 8 s, no try limit); `connect()` is a
   clean re-pair (works even while "connected"); `reconnect()` is one-tap retry. Live screen surfaces
   ⟳ Re-pair (connected) / Reconnect+Re-pair (lost) / Pair (idle). **Phases:** `countdown → live →
@@ -299,11 +301,23 @@ another run" (won't overwrite; a hint says so); history rows key/edit/delete by 
       only, never run against the real Polar H10: the post-run **HRR** test, the new **Resting HR**
       test, and the **standalone Recovery** test (strap pairing, checkpoint capture, resting-low
       tracking, strap-drop grace). Jon's next run with the strap is the validation.
-- [ ] **Native shell (Capacitor) is the main lever.** Two things a browser PWA can't do, both
-      requested: (1) reliable background GPS when the phone is pocketed/screen-off; (2) ducking
-      Spotify during voice cues (no audio focus on web). Both live in `docs/PHASE2_BACKGROUND_GPS.md`.
-      Also still possible in-browser: exempt **interval** days from HR drift alerts if they nag
-      mid-rep (one-liner in `RunView.tsx`).
+- [x] **Session Jul 14 2026 (2) — NATIVE ROADMAP COMPLETE + satellite maps; Jon switched daily
+      drivers.** Field debugging via the new **Crash log** (Sensor check, `lib/errorTrap.ts`) found
+      + fixed the native-GPS wiring: the background-geolocation plugin ships **no JS** — must
+      `registerPlugin()` via lazy `import("@capacitor/core")`; never resolve a Promise with the raw
+      proxy (thenable probe → bogus native call) and `addWatcher` can return its id synchronously
+      (see `[[project_capacitor_shell]]` for all proxy traps). Run Mode shows its GPS source
+      ("pocket-safe ✓" / "⚠ screen-on only") + a 12 s liveness fallback to web GPS. **Jon validated
+      on device**: pocket-safe ✓, tracking survived screen-off + app-switching. **Migration done**
+      (Export→Import), native app is now the daily driver. **M3+M4 shipped** as `android-v0.3.0`
+      (published): cues speak via native TTS with audio focus (ducks Spotify; loud-tone workaround
+      obsolete in the shell) + lime-runner launcher icon. **Satellite route maps** shipped same day
+      (web-only): `SmartRouteMap`/`SatelliteMap`, satellite-first online, SVG fallback — Jon
+      declined a live mid-run map, don't re-pitch. Remaining native polish (M4 leftovers): runtime
+      POST_NOTIFICATIONS prompt + battery-exemption prompt (both manual toggles for now).
+- [ ] **Still open (in-browser):** exempt **interval** days from HR drift alerts if they nag
+      mid-rep (one-liner in `RunView.tsx`). **Soak test pending:** first full strap run in the
+      native app (Sunday 9-miler) — pocketed, screen off, music on.
 - [ ] **Sharpen HR zones with real data.** Zones still use an *estimated* max HR (Tanaka, age 39);
       profile holds only `{age:39, maxHR:181}`. Built and waiting on Jon: Progress → **Fitness tests**
       (guided max-HR + Friel 30-min LTHR TT) write the real numbers, and Progress → **Quick tests**
@@ -311,8 +325,16 @@ another run" (won't overwrite; a hint says so); history rows key/edit/delete by 
       Z2). LTHR is the biggest accuracy win — push him toward that test.
 
 ## Known Issues
-- Web Bluetooth HR is Chrome/Android only — iOS/Safari report unsupported and stay inert.
-- localStorage is per-device: always log from the same phone; export periodically.
+- **Daily driver = the native Android app** (since Jul 14 2026; data migrated via Export→Import).
+  The Chrome PWA is a frozen backup — logging in both **forks the data** (localStorage is
+  per-app). Jon retires the PWA shortcut after the native app survives a long run.
+- Export backups from the **native app** now; per-device AND per-app storage still applies.
+- Web Bluetooth HR is Chrome/Android-browser only; the native app uses real BLE.
+- The native app has no runtime notification prompt yet — the foreground-service "Run in
+  progress" notification stays hidden until Settings → Apps → Erickson 26.2 → Notifications →
+  Allow (M4 leftover).
+- Keystore password must live in Jon's password manager — losing it means future APKs can't
+  update-install (uninstall/reinstall would wipe native-app data).
 
 ## Design Decisions & Constraints
 - Mobile-first — used on a phone, often mid-run (Run Mode = huge numbers, 48px+ targets).
