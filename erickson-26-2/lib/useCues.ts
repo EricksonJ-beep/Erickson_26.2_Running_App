@@ -13,6 +13,7 @@
 
 import { useCallback, useEffect, useRef } from "react";
 import { isNativeApp } from "./nativeBridge";
+import { noteTrapped } from "./errorTrap";
 
 // Native TTS (shell only): Android's speech engine takes transient audio
 // focus, so cues duck Spotify and hand the volume back — the thing Web Speech
@@ -40,6 +41,34 @@ function loadNativeTTS(): Promise<NativeTTS | null> {
       .catch(() => null);
   }
   return ttsPromise;
+}
+
+// Our own local AudioFocus plugin (android/.../AudioFocusPlugin.java): grabs
+// transient may-duck focus so music dips while a cue speaks. The community
+// TTS plugin never requests focus on Android — field-confirmed on Jon's 4-mi
+// run (cues and Spotify at the same level). On an APK older than v0.4.0 the
+// calls reject ("not implemented") and are ignored: cues still speak, no duck.
+interface AudioFocus {
+  requestFocus(): Promise<void>;
+  abandonFocus(): Promise<void>;
+}
+let focusPromise: Promise<AudioFocus | null> | null = null;
+function loadAudioFocus(): Promise<AudioFocus | null> {
+  if (!isNativeApp()) return Promise.resolve(null);
+  if (!focusPromise) {
+    focusPromise = import("@capacitor/core")
+      .then((m) => {
+        const proxy = m.registerPlugin<AudioFocus>("AudioFocus");
+        // Same proxy rules as GPS/TTS: wrap, never hand out the raw proxy.
+        const wrapped: AudioFocus = {
+          requestFocus: () => Promise.resolve(proxy.requestFocus()),
+          abandonFocus: () => Promise.resolve(proxy.abandonFocus())
+        };
+        return wrapped;
+      })
+      .catch(() => null);
+  }
+  return focusPromise;
 }
 
 export interface CueOptions {
@@ -129,16 +158,31 @@ export function useCues(
     (text: string) => {
       if (mutedRef.current) return;
       if (isNativeApp()) {
-        loadNativeTTS().then((tts) => {
-          if (!tts) return webSpeak(text);
-          tts
-            .speak({
+        // Duck → speak → restore. The TTS promise resolves when the utterance
+        // FINISHES (plugin uses UtteranceProgressListener.onDone), so focus is
+        // held for exactly the spoken duration. Focus failures are ignored
+        // (older APK without the AudioFocus plugin: cue still speaks, no duck);
+        // TTS failures fall back to Web Speech and get logged — a silent
+        // fallback is how the no-duck bug hid on the 4-mile run.
+        Promise.all([loadNativeTTS(), loadAudioFocus()]).then(async ([tts, focus]) => {
+          if (!tts) {
+            noteTrapped("native TTS unavailable → web speech");
+            return webSpeak(text);
+          }
+          await focus?.requestFocus().catch(() => {});
+          try {
+            await tts.speak({
               text,
               lang: "en-US",
               rate: cfgRef.current.speechRate,
               volume: cfgRef.current.speechVolume
-            })
-            .catch(() => webSpeak(text));
+            });
+          } catch (e) {
+            noteTrapped(`native TTS failed → web speech: ${e instanceof Error ? e.message : e}`);
+            webSpeak(text);
+          } finally {
+            focus?.abandonFocus().catch(() => {});
+          }
         });
         return;
       }
