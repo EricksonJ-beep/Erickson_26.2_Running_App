@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { todayISO, workoutOn } from "@/lib/plan";
 import { TYPE_EFFORT } from "@/lib/guide";
 import { addRun, deleteRun, getRuns, nextRunId, paceOf, runKey, runsOn, RunLog, saveRun } from "@/lib/storage";
-import RouteMap, { elevationStats } from "./RouteMap";
+import { elevationStats } from "./RouteMap";
+import SmartRouteMap from "./SmartRouteMap";
 
 export default function LogView() {
   const [date, setDate] = useState("");
@@ -343,7 +344,7 @@ export default function LogView() {
                   </div>
                   {hasRoute && mapOpen && (
                     <div className="mt-2.5">
-                      <RouteMap route={r.route} className="rounded-lg" height={170} />
+                      <SmartRouteMap route={r.route} className="rounded-lg" height={170} />
                       {(() => {
                         const elev = elevationStats(r.route);
                         if (!elev) return null;

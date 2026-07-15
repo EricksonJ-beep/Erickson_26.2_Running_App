@@ -157,11 +157,14 @@ Single page, four bottom tabs (`app/page.tsx`): **Today · Plan · Log · Progre
 - **Progress** (`components/ProgressView.tsx`) — trends + JSON **export/import** backup. Includes an
   **80/20 balance** card (`IntensityCard`): time in Z1–Z2 vs Z3+ summed from `RunLog.zoneSeconds`
   over the last 4 weeks of strap runs, with an 80%-easy target tick; hidden under 10 min of data.
-- **Run route map** (`components/RouteMap.tsx`) — offline SVG trace of a saved GPS route (no tiles,
-  no deps); start/finish dots, VOLT colors. On the Run Mode summary, and behind a per-run "Map"
-  toggle in **Log** history (expands trace + per-mile splits). Runs since Jul 2026 also capture GPS
-  **altitude** (`RoutePoint.alt`); `elevationStats()` (3 m hysteresis vs GPS wobble) shows ↑/↓ ft on
-  the summary + Log expansion. Street-map tiles deferred to native.
+- **Run route map** — routes render via `SmartRouteMap.tsx`: **satellite imagery by default when
+  online** (`SatelliteMap.tsx`, lazy-loaded Leaflet + free keyless Esri World Imagery, VOLT-gold
+  line w/ ink halo, sage/ember dots, pinch-zoom, Satellite/Trace toggle) with the self-contained
+  offline SVG trace (`RouteMap.tsx`) as toggle + automatic fallback (offline at mount, Leaflet
+  chunk failure, or ≥3 tile errors before any load — per-session sticky). On the Run Mode summary
+  + Log "Map" expansion. Runs since Jul 2026 also capture GPS **altitude** (`RoutePoint.alt`);
+  `elevationStats()` (3 m hysteresis) shows ↑/↓ ft in both spots. See
+  `erickson-26-2/docs/SATELLITE_MAP_PLAN.md` (phase 2: SW tile caching, street layer).
 - **PWA** — `public/manifest.json` + `public/sw.js` service worker, installable, offline.
 
 ## Data Model (`lib/storage.ts`)

@@ -17,7 +17,8 @@ import {
 } from "@/lib/storage";
 import { hrr1BandInfo } from "@/lib/recovery";
 import { isNativeApp } from "@/lib/nativeBridge";
-import RouteMap, { elevationStats } from "./RouteMap";
+import { elevationStats } from "./RouteMap";
+import SmartRouteMap from "./SmartRouteMap";
 import RecoveryTestView from "./RecoveryTestView";
 
 // Fallback RPE by workout type when no HR data exists for the run.
@@ -567,7 +568,7 @@ export default function RunView({
                   <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-ember" /> Finish</span>
                 </div>
               </div>
-              <RouteMap route={result.route} className="rounded-lg" height={200} />
+              <SmartRouteMap route={result.route} className="rounded-lg" height={200} />
               {(() => {
                 const elev = elevationStats(result.route);
                 if (!elev) return null;

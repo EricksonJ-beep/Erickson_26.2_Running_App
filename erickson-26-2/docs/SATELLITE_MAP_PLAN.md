@@ -1,7 +1,10 @@
 # Satellite Route Maps — Plan
 
-> Status: **draft for Jon's review** (Jul 14 2026). Requested: replace/augment the
-> plain SVG route trace with the route drawn over real satellite imagery.
+> Status: **BUILT as planned, Jul 14 2026** (Jon approved: free Esri imagery, no
+> live mid-run map). `SatelliteMap.tsx` (lazy Leaflet + Esri) behind
+> `SmartRouteMap.tsx` (satellite-first online, Satellite/Trace toggle, automatic
+> SVG fallback offline / on tile failure) on the Run Mode summary + Log
+> expansion. Web-only — shipped over the air. Phase-2 items below remain open.
 
 ## Recommendation in one line
 
