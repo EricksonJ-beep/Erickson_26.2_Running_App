@@ -71,6 +71,32 @@ export function isNativeApp(): boolean {
 // registered it. registerPlugin comes from a lazy import of @capacitor/core,
 // the same mechanism the BLE HR transport uses (proven on device); gated on
 // isNativeApp(), so the PWA never fetches the chunk.
+// Screen pinning (lock-task mode) for Run Mode's lock overlay — blocks the OS
+// home/recents gestures so a bouncing pocket can't leave the app. Same lazy
+// registerPlugin + wrapper rules as everything else; on an APK without the
+// plugin the calls reject and callers ignore it (overlay-only lock).
+export interface ScreenPinPlugin {
+  pin(): Promise<void>;
+  unpin(): Promise<void>;
+}
+let pinPromise: Promise<ScreenPinPlugin | null> | null = null;
+export function loadScreenPin(): Promise<ScreenPinPlugin | null> {
+  if (!isNativeApp()) return Promise.resolve(null);
+  if (!pinPromise) {
+    pinPromise = import("@capacitor/core")
+      .then((m) => {
+        const proxy = m.registerPlugin<ScreenPinPlugin>("ScreenPin");
+        const wrapped: ScreenPinPlugin = {
+          pin: () => Promise.resolve(proxy.pin()),
+          unpin: () => Promise.resolve(proxy.unpin())
+        };
+        return wrapped;
+      })
+      .catch(() => null);
+  }
+  return pinPromise;
+}
+
 let geoPromise: Promise<BackgroundGeolocationPlugin | null> | null = null;
 export function loadNativeGeo(): Promise<BackgroundGeolocationPlugin | null> {
   if (!isNativeApp()) return Promise.resolve(null);

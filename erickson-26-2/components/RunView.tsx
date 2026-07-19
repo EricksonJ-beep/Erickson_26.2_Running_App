@@ -16,7 +16,7 @@ import {
   getProfile, addRun, clearLiveRun, saveLiveRun, LiveRunCheckpoint, RecoveryTest
 } from "@/lib/storage";
 import { hrr1BandInfo } from "@/lib/recovery";
-import { isNativeApp } from "@/lib/nativeBridge";
+import { isNativeApp, loadScreenPin } from "@/lib/nativeBridge";
 import { elevationStats } from "./RouteMap";
 import SmartRouteMap from "./SmartRouteMap";
 import RecoveryTestView from "./RecoveryTestView";
@@ -408,6 +408,21 @@ export default function RunView({
     setUnlockPct(0);
   }, []);
 
+  // Native shell: pin the app to the screen while the lock overlay is up, so
+  // the OS home/recents gestures are blocked too (a bouncing pocket reached
+  // the dialer through them, Jul 19). Unpin on unlock/unmount. On an APK
+  // without the ScreenPin plugin these calls no-op harmlessly.
+  useEffect(() => {
+    if (!isNativeApp()) return;
+    loadScreenPin().then((p) => {
+      if (!p) return;
+      (locked ? p.pin() : p.unpin()).catch(() => {});
+    });
+    return () => {
+      if (locked) loadScreenPin().then((p) => p?.unpin().catch(() => {}));
+    };
+  }, [locked]);
+
   // Safety net for the hold timers: clear any in-flight interval when the lock
   // overlay toggles (the button that owns the hold unmounts), when the app is
   // backgrounded (a missed pointerup would otherwise leak a self-firing
@@ -732,8 +747,15 @@ export default function RunView({
     return (
       <div className="fixed inset-0 z-[60] bg-ink flex flex-col">
         <div className="mx-auto max-w-md w-full flex-1 flex flex-col justify-center gap-7 px-6 pt-[max(1rem,env(safe-area-inset-top))]">
-          <div className="text-center text-[11px] uppercase tracking-widest text-dust font-display font-semibold">
-            🔒 Locked
+          <div className="text-center">
+            <div className="text-[11px] uppercase tracking-widest text-dust font-display font-semibold">
+              🔒 Locked
+            </div>
+            {isNativeApp() && (
+              <div className="text-[10px] text-dust mt-0.5">
+                Phone gestures blocked · unlock below to leave the app
+              </div>
+            )}
           </div>
           <div className="text-center">
             <div className="text-[11px] uppercase tracking-widest text-dust font-display font-semibold">
