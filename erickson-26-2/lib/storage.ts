@@ -87,6 +87,7 @@ const BODY_KEY = "hr_body_v1";
 const SEEDED_KEY = "hr_seeded_v1"; // seed entries already merged (date#rev -> true)
 
 const EXPORT_KEY = "hr_lastExport_v1"; // ISO timestamp of the last JSON export
+const MOVES_KEY = "hr_planMoves_v1"; // plan rescheduling: original workout date -> new date
 const LIVE_RUN_KEY = "hr_liveRun_v1"; // mid-run checkpoint (crash recovery), cleared on save/discard
 
 function read<T>(key: string, fallback: T): T {
@@ -167,6 +168,21 @@ export function deleteRun(key: string) {
   const all = { ...getRuns() };
   delete all[key];
   write(RUNS_KEY, all);
+}
+
+// ── Plan rescheduling ──
+// Life moves workouts (Sat long run → Sun). Keyed by the workout's ORIGINAL
+// plan.ts date — the canonical schedule never changes, the app just renders
+// the workout on its new date (lib/plan.ts getPlan() applies these). Mapping
+// to the same date (or a deleted entry) = back to the original day.
+export function getPlanMoves(): Record<string, string> {
+  return read(MOVES_KEY, {});
+}
+export function movePlannedRun(originalDate: string, toDate: string): boolean {
+  const all = getPlanMoves();
+  if (toDate === originalDate) delete all[originalDate];
+  else all[originalDate] = toDate;
+  return write(MOVES_KEY, all);
 }
 
 // ── Mid-run checkpoint (crash recovery) ──
@@ -293,6 +309,7 @@ export function exportAll(): string {
       profile: getProfile(),
       body: getBody(),
       calis: getCalis(),
+      planMoves: getPlanMoves(),
       seeded: read(SEEDED_KEY, {})
     },
     null,
@@ -348,6 +365,7 @@ export function importAll(json: string): boolean {
     if (isRecord(data.profile)) write(PROFILE_KEY, data.profile);
     if (isRecord(data.body)) write(BODY_KEY, data.body);
     if (isRecord(data.calis)) write(CALIS_KEY, data.calis);
+    if (isRecord(data.planMoves)) write(MOVES_KEY, data.planMoves);
     if (isRecord(data.seeded)) write(SEEDED_KEY, data.seeded);
     return true;
   } catch {

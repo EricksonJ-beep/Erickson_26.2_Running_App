@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PLAN, findWeek, todayISO, Workout, WorkoutType } from "@/lib/plan";
+import { getPlan, findWeek, todayISO, Workout, WorkoutType } from "@/lib/plan";
 import { EFFORT_GUIDE, RACE_INTEL, ROADBLOCKS, FUELING_GUIDE, FUEL_NOTE, FuelGuide } from "@/lib/guide";
 import { hrGuide, bandKeyFor } from "@/lib/zones";
-import { getDone, getProfile, getRuns } from "@/lib/storage";
+import { getDone, getProfile, getRuns, movePlannedRun } from "@/lib/storage";
 
 // Partial so adding a WorkoutType forces a conscious choice here (or the
 // bg-dust fallback below); "rest" and "free" intentionally have no dot.
@@ -35,6 +35,7 @@ function weekEndISO(start: string): string {
 export default function PlanView() {
   const [today, setToday] = useState("");
   const [open, setOpen] = useState<number | null>(null);
+  const [, force] = useState(0); // re-render after a workout is moved
   useEffect(() => {
     const t = todayISO();
     setToday(t);
@@ -52,7 +53,7 @@ export default function PlanView() {
 
   // Phase progress for the header card
   const phaseWeeks = currentWeekObj
-    ? PLAN.filter((w) => w.phase === currentWeekObj.phase)
+    ? getPlan().filter((w) => w.phase === currentWeekObj.phase)
     : [];
   const weekInPhase = currentWeekObj
     ? phaseWeeks.findIndex((w) => w.num === currentWeekObj.num) + 1
@@ -92,7 +93,7 @@ export default function PlanView() {
         </div>
       )}
 
-      {PLAN.map((w) => {
+      {getPlan().map((w) => {
         const isOpen = open === w.num;
         const isCurrent = currentWeekNum === w.num;
         const isPast = weekEndISO(w.start) < today;
@@ -153,11 +154,15 @@ export default function PlanView() {
                 <div className="space-y-2">
                   {w.workouts.map((x) => (
                     <DayRow
-                      key={x.date}
+                      key={x.movedFrom ?? x.date}
                       x={x}
                       logged={runDates.has(x.date) || !!done[x.date]}
                       isToday={x.date === today}
                       hrTarget={hrTargetFor(x, guide)}
+                      weekStart={w.start}
+                      occupied={new Set(w.workouts.map((x2) => x2.date))}
+                      canMove={!(runDates.has(x.date) || done[x.date]) && weekEndISO(w.start) >= today}
+                      onMoved={() => force((n) => n + 1)}
                     />
                   ))}
                 </div>
@@ -322,17 +327,34 @@ function GuideCard({ title, children }: { title: string; children: React.ReactNo
   );
 }
 
+const DAY_LETTERS = ["M", "T", "W", "T", "F", "S", "S"];
+
+function dayOf(weekStart: string, offset: number): string {
+  const dt = new Date(weekStart + "T12:00:00");
+  dt.setDate(dt.getDate() + offset);
+  return dt.toISOString().slice(0, 10);
+}
+
 function DayRow({
   x,
   logged,
   isToday,
-  hrTarget
+  hrTarget,
+  weekStart,
+  occupied,
+  canMove,
+  onMoved
 }: {
   x: Workout;
   logged: boolean;
   isToday: boolean;
   hrTarget: string | null;
+  weekStart: string;
+  occupied: Set<string>; // effective dates already used in this week
+  canMove: boolean;
+  onMoved: () => void;
 }) {
+  const [picking, setPicking] = useState(false);
   return (
     <div
       className={`rounded-lg px-3 py-2.5 ${
@@ -350,7 +372,53 @@ function DayRow({
           <span className="font-display font-semibold text-gold tabular-nums">{x.miles}</span>
         )}
         {logged && <span className="text-sage text-sm">✓</span>}
+        {canMove && (
+          <button
+            onClick={() => setPicking(!picking)}
+            aria-expanded={picking}
+            aria-label={`Move ${x.title} to another day`}
+            className={`text-[10px] font-display font-semibold uppercase tracking-widest border rounded px-1.5 py-1 shrink-0 min-h-[28px] ${
+              picking ? "text-gold border-gold/40" : "text-dust border-seam"
+            }`}
+          >
+            {picking ? "✕" : "Move"}
+          </button>
+        )}
       </div>
+      {/* Day picker — move within this week. Occupied days are disabled; the
+          current day is highlighted; picking the original day clears the move. */}
+      {picking && (
+        <div className="mt-2 ml-[18px] flex gap-1">
+          {DAY_LETTERS.map((letter, i) => {
+            const d = dayOf(weekStart, i);
+            const isSelf = d === x.date;
+            const taken = occupied.has(d) && !isSelf;
+            return (
+              <button
+                key={d}
+                disabled={taken}
+                onClick={() => {
+                  movePlannedRun(x.movedFrom ?? x.date, d);
+                  setPicking(false);
+                  onMoved();
+                }}
+                className={`flex-1 py-2 rounded text-[10px] font-display font-bold min-h-[36px] ${
+                  isSelf
+                    ? "bg-gold text-ink"
+                    : taken
+                    ? "bg-ink text-dust/30 border border-seam"
+                    : "bg-coal text-bone border border-seam"
+                }`}
+              >
+                {letter}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {x.movedFrom && (
+        <p className="text-[10px] text-dust mt-1 ml-[18px]">📅 Moved from {fmtShort(x.movedFrom)}</p>
+      )}
       {hrTarget && (
         <div className="mt-1.5 ml-[18px] flex items-baseline gap-1.5">
           <span className="text-[9px] uppercase tracking-widest text-dust font-display font-semibold">

@@ -5,6 +5,7 @@
 // Built on 80/20 intensity distribution, the 10% mileage rule,
 // weekly lactate-threshold work, and research-backed taper windows.
 // ─────────────────────────────────────────────────────────────
+import { getPlanMoves } from "./storage";
 
 export type WorkoutType =
   | "rest"
@@ -19,13 +20,14 @@ export type WorkoutType =
   | "free"; // ad-hoc run started from Today, not on the plan — no pace target
 
 export interface Workout {
-  date: string; // YYYY-MM-DD
+  date: string; // YYYY-MM-DD (effective date — a reschedule changes this)
   type: WorkoutType;
   title: string;
   detail: string;
   miles: number; // planned run miles (0 for non-running)
   optional?: boolean;
   note?: string; // personal route/goal note (e.g. "Run around Big Lake")
+  movedFrom?: string; // original plan date when rescheduled in-app (hr_planMoves_v1)
 }
 
 export type Phase = "Base" | "Half Build" | "Recovery Bridge" | "Marathon Build" | "Taper" | "Race Week";
@@ -168,7 +170,7 @@ export const PLAN: Week[] = [
     { d: 1, type: "tempo", title: "Tempo", detail: "1 mi easy → 2 mi continuous @ tempo → 1 mi easy.", miles: 4 },
     { d: 2, type: "easy", title: "Easy run", detail: "4 mi conversational.", miles: 4 },
     XT(3),
-    { d: 5, type: "long", title: "Long run", detail: "10 mi on a rolling route — first 8 relaxed, last 2 @ goal pace (9:00). Race pace on tired legs is the point. Chippewa's mile-5 hill is coming; fuel mid-run (gel or chews around mile 5).", miles: 10 }
+    { d: 6, type: "long", title: "Long run", detail: "10 mi on a rolling route — first 8 relaxed, last 2 @ goal pace (9:00). Race pace on tired legs is the point. Chippewa's mile-5 hill is coming; fuel mid-run (gel or chews around mile 5). (Moved Sat → Sun, Jon's schedule.)", miles: 10 }
   ]),
   wk(7, "Half Build", "2026-07-20", "Peak week of the half build.", [
     STR(0),
@@ -262,8 +264,32 @@ export function todayISO(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+// ── Effective plan: PLAN with Jon's in-app reschedules applied ──
+// plan.ts stays the canonical schedule; hr_planMoves_v1 (storage) holds
+// original-date → new-date overrides made from the Plan tab, so a Saturday
+// long run he actually runs Sunday shows up — and launches live in Run Mode —
+// on Sunday. Cached against the moves snapshot; rebuilt only when they change.
+let planCache: { key: string; weeks: Week[] } | null = null;
+
+export function getPlan(): Week[] {
+  const moves = typeof window === "undefined" ? {} : getPlanMoves();
+  const key = JSON.stringify(moves);
+  if (planCache?.key === key) return planCache.weeks;
+  const weeks =
+    Object.keys(moves).length === 0
+      ? PLAN
+      : PLAN.map((w) => ({
+          ...w,
+          workouts: w.workouts
+            .map((x) => (moves[x.date] ? { ...x, date: moves[x.date], movedFrom: x.date } : x))
+            .sort((a, b) => (a.date < b.date ? -1 : 1))
+        }));
+  planCache = { key, weeks };
+  return weeks;
+}
+
 export function findWeek(dateISO: string): Week | undefined {
-  return PLAN.find((w) => dateISO >= w.start && dateISO <= addDays(w.start, 6));
+  return getPlan().find((w) => dateISO >= w.start && dateISO <= addDays(w.start, 6));
 }
 
 export function workoutOn(dateISO: string): Workout | undefined {
@@ -272,7 +298,7 @@ export function workoutOn(dateISO: string): Workout | undefined {
 }
 
 export function nextWorkout(dateISO: string): Workout | undefined {
-  for (const w of PLAN) {
+  for (const w of getPlan()) {
     for (const x of w.workouts) {
       if (x.date > dateISO && x.miles > 0) return x;
     }

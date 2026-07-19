@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { PLAN, Phase, daysUntil, findWeek, todayISO } from "@/lib/plan";
+import { getPlan, Phase, daysUntil, findWeek, todayISO } from "@/lib/plan";
 import { computeZones, methodLabel } from "@/lib/zones";
 import {
   CALIS_GOAL, CalisLog, exportAll, getBody, getCalis, getDone, getLastExport, getProfile,
@@ -41,7 +41,7 @@ export default function ProgressView() {
   const currentWeekNum = findWeek(today)?.num ?? 0;
 
   // Weekly mileage vs plan
-  const weekly = PLAN.map((w) => {
+  const weekly = getPlan().map((w) => {
     let actual = 0;
     for (const r of runs) {
       const d = daysUntil(r.date, w.start);
@@ -69,7 +69,7 @@ export default function ProgressView() {
   // Compliance: required (non-optional) workouts in the past. Any run on the
   // date counts (a day can hold multiple runs), so match on the set of run dates.
   const runDates = new Set(runs.map((r) => r.date));
-  const pastWorkouts = PLAN.flatMap((w) => w.workouts)
+  const pastWorkouts = getPlan().flatMap((w) => w.workouts)
     .filter((x) => x.date < today && !x.optional);
   const completedCount = pastWorkouts.filter(
     (x) => runDates.has(x.date) || doneMap[x.date]
