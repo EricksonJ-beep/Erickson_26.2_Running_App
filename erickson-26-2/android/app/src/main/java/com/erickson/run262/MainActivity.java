@@ -9,6 +9,7 @@ public class MainActivity extends BridgeActivity {
         // Local plugins must register before the bridge boots.
         registerPlugin(AudioFocusPlugin.class);
         registerPlugin(ScreenPinPlugin.class);
+        registerPlugin(AppInfoPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

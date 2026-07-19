@@ -13,6 +13,7 @@ import {
   addCalis, CALIS_GOAL, clearLiveRun, getCalis, getDone, getLiveRun, getProfile, getRuns,
   runsOn, paceOf, toggleDone, LiveRunCheckpoint
 } from "@/lib/storage";
+import { checkForUpdate, dismissUpdate, UpdateInfo } from "@/lib/appUpdate";
 
 export default function TodayView({ onGoLog }: { onGoLog: () => void }) {
   const [today, setToday] = useState("");
@@ -22,9 +23,12 @@ export default function TodayView({ onGoLog }: { onGoLog: () => void }) {
   const [pendingRecovery, setPendingRecovery] = useState<LiveRunCheckpoint | null>(null);
   const [resumeCp, setResumeCp] = useState<LiveRunCheckpoint | null>(null);
   const [, force] = useState(0);
+  // Native app only: a newer APK is on GitHub (rare — native-layer changes only)
+  const [update, setUpdate] = useState<UpdateInfo | null>(null);
   useEffect(() => {
     setToday(todayISO());
     setPendingRecovery(getLiveRun());
+    checkForUpdate().then(setUpdate);
   }, []);
   if (!today) return null;
 
@@ -113,6 +117,38 @@ export default function TodayView({ onGoLog }: { onGoLog: () => void }) {
               Discard
             </button>
           </div>
+        </div>
+      )}
+
+      {/* App update — a newer APK was released (native-layer changes only) */}
+      {update && (
+        <div className="bg-coal rounded-xl border border-gold/40 px-4 py-3 flex items-center gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="text-[11px] uppercase tracking-widest text-gold font-display font-bold">
+              App update available
+            </div>
+            <p className="text-xs text-dust mt-0.5 leading-snug">
+              A newer build ({update.tag.replace("android-", "")}) is ready to install.
+            </p>
+          </div>
+          <a
+            href={update.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shrink-0 bg-gold text-ink font-display font-bold tracking-widest uppercase rounded-lg px-3 py-2.5 text-xs min-h-[44px] flex items-center"
+          >
+            Get it
+          </a>
+          <button
+            onClick={() => {
+              dismissUpdate(update.tag);
+              setUpdate(null);
+            }}
+            aria-label="Dismiss update notice"
+            className="shrink-0 w-9 h-9 rounded-lg border border-seam text-dust text-sm"
+          >
+            ✕
+          </button>
         </div>
       )}
 

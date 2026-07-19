@@ -97,6 +97,27 @@ export function loadScreenPin(): Promise<ScreenPinPlugin | null> {
   return pinPromise;
 }
 
+// APK version info (AppInfoPlugin.java). NOTE: the plugin ships with the
+// FIRST APK built after Jul 19 2026 — on earlier installs get() rejects and
+// lib/appUpdate falls back to capability probing. Same wrapper rules apply.
+export interface AppInfoPlugin {
+  get(): Promise<{ version: string }>;
+}
+let appInfoPromise: Promise<AppInfoPlugin | null> | null = null;
+export function loadAppInfo(): Promise<AppInfoPlugin | null> {
+  if (!isNativeApp()) return Promise.resolve(null);
+  if (!appInfoPromise) {
+    appInfoPromise = import("@capacitor/core")
+      .then((m) => {
+        const proxy = m.registerPlugin<AppInfoPlugin>("AppInfo");
+        const wrapped: AppInfoPlugin = { get: () => Promise.resolve(proxy.get()) };
+        return wrapped;
+      })
+      .catch(() => null);
+  }
+  return appInfoPromise;
+}
+
 let geoPromise: Promise<BackgroundGeolocationPlugin | null> | null = null;
 export function loadNativeGeo(): Promise<BackgroundGeolocationPlugin | null> {
   if (!isNativeApp()) return Promise.resolve(null);
