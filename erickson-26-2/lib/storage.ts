@@ -204,6 +204,9 @@ export interface LiveRunCheckpoint {
     splits: number[];
   };
   hr: { weightedSum: number; weightSec: number; zoneSeconds: number[] };
+  // Structured-workout position, so a recovered interval run resumes on the
+  // right rep instead of forgetting its own segments. Absent on plain runs.
+  seg?: { index: number; startMi: number; startSec: number };
 }
 
 export function saveLiveRun(c: LiveRunCheckpoint) {

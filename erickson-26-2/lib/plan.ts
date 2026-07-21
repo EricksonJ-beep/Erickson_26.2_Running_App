@@ -27,6 +27,7 @@ export interface Workout {
   miles: number; // planned run miles (0 for non-running)
   optional?: boolean;
   note?: string; // personal route/goal note (e.g. "Run around Big Lake")
+  segments?: Segment[]; // structured-workout breakdown for Run Mode segment coaching
   movedFrom?: string; // original plan date when rescheduled in-app (hr_planMoves_v1)
 }
 
@@ -76,6 +77,79 @@ export const PACE_NOTES: Record<keyof typeof PACES, string> = {
   marathon: "Projected marathon effort. Practice it; don't race it in training."
 };
 
+// ── Structured-workout segments (Run Mode live segment coaching) ──
+// A structured session (intervals, tempo, progression long run) is a sequence
+// of segments, each ending on a distance OR a duration. Run Mode walks them
+// live: announces each on start, auto-advances when its trigger is hit, and
+// scopes pace judgment to the segment's own target. Absent = a plain run,
+// coached the old way.
+export type SegTrigger =
+  | { type: "distance"; miles: number } // ends after this many miles run IN the segment
+  | { type: "time"; seconds: number }; // ends after this many seconds IN the segment
+
+export interface Segment {
+  kind: "warmup" | "work" | "recovery" | "cooldown";
+  label: string; // "Warm-up", "Rep 2 of 5", "Recovery jog", "Cool-down"
+  until: SegTrigger;
+  paceKey?: keyof typeof PACES; // strict pace target; absent = run by effort
+  effort?: string; // spoken effort word when there's no pace target ("hard", "easy jog")
+}
+
+// N paced distance reps, each 1 followed by a timed recovery jog (last rep
+// flows straight to the cool-down). warm/cool are easy miles.
+function intervalsDist(
+  warmMi: number, reps: number, repMi: number,
+  paceKey: keyof typeof PACES, jogSec: number, coolMi: number
+): Segment[] {
+  const segs: Segment[] = [
+    { kind: "warmup", label: "Warm-up", until: { type: "distance", miles: warmMi }, paceKey: "easy", effort: "easy" }
+  ];
+  for (let i = 1; i <= reps; i++) {
+    segs.push({ kind: "work", label: `Rep ${i} of ${reps}`, until: { type: "distance", miles: repMi }, paceKey });
+    if (i < reps) segs.push({ kind: "recovery", label: "Recovery jog", until: { type: "time", seconds: jogSec }, effort: "easy jog" });
+  }
+  segs.push({ kind: "cooldown", label: "Cool-down", until: { type: "distance", miles: coolMi }, paceKey: "easy", effort: "easy" });
+  return segs;
+}
+
+// N effort-based time reps ("2 min hard"), each 1 followed by a timed jog.
+function intervalsTime(
+  warmMi: number, reps: number, workSec: number, effort: string,
+  jogSec: number, coolMi: number
+): Segment[] {
+  const segs: Segment[] = [
+    { kind: "warmup", label: "Warm-up", until: { type: "distance", miles: warmMi }, paceKey: "easy", effort: "easy" }
+  ];
+  for (let i = 1; i <= reps; i++) {
+    segs.push({ kind: "work", label: `Rep ${i} of ${reps}`, until: { type: "time", seconds: workSec }, effort });
+    if (i < reps) segs.push({ kind: "recovery", label: "Recovery jog", until: { type: "time", seconds: jogSec }, effort: "easy jog" });
+  }
+  segs.push({ kind: "cooldown", label: "Cool-down", until: { type: "distance", miles: coolMi }, paceKey: "easy", effort: "easy" });
+  return segs;
+}
+
+// Easy warm-up → one paced block → easy cool-down (tempo / marathon-pace runs).
+function tempoSegs(
+  warmMi: number, workMi: number, paceKey: keyof typeof PACES, coolMi: number,
+  workLabel = "Tempo"
+): Segment[] {
+  return [
+    { kind: "warmup", label: "Warm-up", until: { type: "distance", miles: warmMi }, paceKey: "easy", effort: "easy" },
+    { kind: "work", label: workLabel, until: { type: "distance", miles: workMi }, paceKey },
+    { kind: "cooldown", label: "Cool-down", until: { type: "distance", miles: coolMi }, paceKey: "easy", effort: "easy" }
+  ];
+}
+
+// Relaxed miles then a paced finish (progression long run).
+function progressionSegs(
+  easyMi: number, fastMi: number, paceKey: keyof typeof PACES
+): Segment[] {
+  return [
+    { kind: "warmup", label: "Relaxed miles", until: { type: "distance", miles: easyMi }, paceKey: "long", effort: "relaxed" },
+    { kind: "work", label: "Pace finish", until: { type: "distance", miles: fastMi }, paceKey }
+  ];
+}
+
 // d = day offset from the week's Monday (0=Mon … 6=Sun)
 interface Spec {
   d: number;
@@ -85,6 +159,7 @@ interface Spec {
   miles?: number;
   optional?: boolean;
   note?: string; // personal route/goal note
+  segments?: Segment[]; // structured-workout breakdown for Run Mode
 }
 
 function addDays(iso: string, n: number): string {
@@ -101,7 +176,8 @@ function wk(num: number, phase: Phase, start: string, focus: string, specs: Spec
     detail: s.detail,
     miles: s.miles ?? 0,
     optional: s.optional,
-    note: s.note
+    note: s.note,
+    segments: s.segments
   }));
   const plannedMiles = workouts.reduce((a, w) => a + w.miles, 0);
   return { num, phase, start, focus, plannedMiles, workouts };
@@ -160,21 +236,21 @@ export const PLAN: Week[] = [
   ]),
   wk(5, "Half Build", "2026-07-06", "Volume climbs. Protect the easy days.", [
     STR(0),
-    { d: 1, type: "intervals", title: "Intervals", detail: "1 mi easy → 5×(2 min hard / 2 min jog) → 1 mi easy. ~4 mi.", miles: 4 },
+    { d: 1, type: "intervals", title: "Intervals", detail: "1 mi easy → 5×(2 min hard / 2 min jog) → 1 mi easy. ~4 mi.", miles: 4, segments: intervalsTime(1, 5, 120, "hard", 120, 1) },
     { d: 2, type: "easy", title: "Easy run", detail: "3 mi conversational.", miles: 3 },
     XT(3),
     { d: 6, type: "long", title: "Long run", detail: "9 mi relaxed. Moved to Sunday — Saturday didn't work this week. Test race-day breakfast this morning. Monday's strength is optional as always; skip or go light if the legs are still heavy.", miles: 9 }
   ]),
   wk(6, "Half Build", "2026-07-13", "Longest tempo yet. Race pace gets real.", [
     STR(0),
-    { d: 1, type: "tempo", title: "Tempo", detail: "1 mi easy → 2 mi continuous @ tempo → 1 mi easy.", miles: 4 },
+    { d: 1, type: "tempo", title: "Tempo", detail: "1 mi easy → 2 mi continuous @ tempo → 1 mi easy.", miles: 4, segments: tempoSegs(1, 2, "tempo", 1) },
     { d: 2, type: "easy", title: "Easy run", detail: "4 mi conversational.", miles: 4 },
     XT(3),
-    { d: 6, type: "long", title: "Long run", detail: "10 mi on a rolling route — first 8 relaxed, last 2 @ goal pace (9:00). Race pace on tired legs is the point. Chippewa's mile-5 hill is coming; fuel mid-run (gel or chews around mile 5). (Moved Sat → Sun, Jon's schedule.)", miles: 10 }
+    { d: 6, type: "long", title: "Long run", detail: "10 mi on a rolling route — first 8 relaxed, last 2 @ goal pace (9:00). Race pace on tired legs is the point. Chippewa's mile-5 hill is coming; fuel mid-run (gel or chews around mile 5). (Moved Sat → Sun, Jon's schedule.)", miles: 10, segments: progressionSegs(8, 2, "halfRace") }
   ]),
   wk(7, "Half Build", "2026-07-20", "Peak week of the half build.", [
     STR(0),
-    { d: 1, type: "intervals", title: "Intervals", detail: "1 mi easy → 3×(1 mi @ 8:50–9:00, 3 min jog) → ½ mi easy. ~4.5 mi.", miles: 4.5 },
+    { d: 1, type: "intervals", title: "Intervals", detail: "1 mi easy → 3×(1 mi @ 8:50–9:00, 3 min jog) → ½ mi easy. ~4.5 mi.", miles: 4.5, segments: intervalsDist(1, 3, 1, "halfRace", 180, 0.5) },
     { d: 2, type: "easy", title: "Easy run", detail: "3 mi conversational.", miles: 3 },
     XT(3),
     { d: 4, type: "easy", title: "Easy run", detail: "2 mi very relaxed.", miles: 2 },
@@ -182,9 +258,9 @@ export const PLAN: Week[] = [
   ]),
   wk(8, "Half Build", "2026-07-27", "Taper begins. Volume drops, sharpness stays.", [
     STR(0),
-    { d: 1, type: "tempo", title: "Race-pace tempo", detail: "1 mi easy → 2 mi @ goal pace (9:00) → 1 mi easy. This pace should feel repeatable, not hard.", miles: 4 },
+    { d: 1, type: "tempo", title: "Race-pace tempo", detail: "1 mi easy → 2 mi @ goal pace (9:00) → 1 mi easy. This pace should feel repeatable, not hard.", miles: 4, segments: tempoSegs(1, 2, "halfRace", 1, "Race pace") },
     { d: 2, type: "easy", title: "Easy run", detail: "3 mi conversational.", miles: 3 },
-    { d: 5, type: "long", title: "Long run — taper", detail: "8 mi relaxed, last 2 @ race pace. Lock in pacing feel.", miles: 8 }
+    { d: 5, type: "long", title: "Long run — taper", detail: "8 mi relaxed, last 2 @ race pace. Lock in pacing feel.", miles: 8, segments: progressionSegs(6, 2, "halfRace") }
   ]),
   wk(9, "Race Week", "2026-08-03", "Chippewa Falls. Trust the work.", [
     { d: 1, type: "easy", title: "Easy + strides", detail: "3 mi easy + 4×20-sec strides. Legs stay awake, nothing more.", miles: 3 },
@@ -208,7 +284,7 @@ export const PLAN: Week[] = [
   // ── PHASE 3 · MARATHON BUILD ──
   wk(12, "Marathon Build", "2026-08-24", "Marathon block opens. Long runs become the centerpiece.", [
     STR(0),
-    { d: 1, type: "tempo", title: "Tempo", detail: "1 mi easy → 2 mi @ tempo → 1 mi easy.", miles: 4 },
+    { d: 1, type: "tempo", title: "Tempo", detail: "1 mi easy → 2 mi @ tempo → 1 mi easy.", miles: 4, segments: tempoSegs(1, 2, "tempo", 1) },
     { d: 2, type: "easy", title: "Easy run", detail: "3 mi conversational.", miles: 3 },
     XT(3),
     { d: 4, type: "easy", title: "Easy run", detail: "2 mi very relaxed.", miles: 2 },
@@ -216,14 +292,14 @@ export const PLAN: Week[] = [
   ]),
   wk(13, "Marathon Build", "2026-08-31", "School's back — protect the Saturday long run above all.", [
     STR(0),
-    { d: 1, type: "intervals", title: "Intervals", detail: "1 mi easy → 4×(3 min hard / 2 min jog) → 1 mi easy. ~4 mi.", miles: 4 },
+    { d: 1, type: "intervals", title: "Intervals", detail: "1 mi easy → 4×(3 min hard / 2 min jog) → 1 mi easy. ~4 mi.", miles: 4, segments: intervalsTime(1, 4, 180, "hard", 120, 1) },
     { d: 2, type: "easy", title: "Easy run", detail: "4 mi conversational.", miles: 4 },
     { d: 4, type: "easy", title: "Easy run", detail: "2 mi very relaxed.", miles: 2 },
     { d: 5, type: "long", title: "Long run", detail: "14 mi relaxed — new lifetime distance. Slow is the whole point.", miles: 14 }
   ]),
   wk(14, "Marathon Build", "2026-09-07", "Marathon pace enters the long game.", [
     STR(0),
-    { d: 1, type: "tempo", title: "MP tempo", detail: "1 mi easy → 3 mi @ marathon pace (9:35–9:45) → 1 mi easy.", miles: 5 },
+    { d: 1, type: "tempo", title: "MP tempo", detail: "1 mi easy → 3 mi @ marathon pace (9:35–9:45) → 1 mi easy.", miles: 5, segments: tempoSegs(1, 3, "marathon", 1, "Marathon pace") },
     { d: 2, type: "easy", title: "Easy run", detail: "4 mi conversational.", miles: 4 },
     XT(3),
     { d: 4, type: "easy", title: "Easy run", detail: "2 mi very relaxed.", miles: 2 },
@@ -234,11 +310,11 @@ export const PLAN: Week[] = [
     { d: 1, type: "easy", title: "Easy run", detail: "4 mi conversational.", miles: 4 },
     { d: 2, type: "easy", title: "Easy run", detail: "3 mi + 4×20-sec strides.", miles: 3 },
     { d: 4, type: "easy", title: "Easy run", detail: "2 mi very relaxed.", miles: 2 },
-    { d: 5, type: "long", title: "Long run", detail: "12 mi with final 4 @ marathon pace. Finish-strong rehearsal.", miles: 12 }
+    { d: 5, type: "long", title: "Long run", detail: "12 mi with final 4 @ marathon pace. Finish-strong rehearsal.", miles: 12, segments: progressionSegs(8, 4, "marathon") }
   ]),
   wk(16, "Marathon Build", "2026-09-21", "Peak week. The 20-miler is the final exam before taper.", [
     STR(0),
-    { d: 1, type: "tempo", title: "Tempo", detail: "1 mi easy → 3 mi @ tempo → 1 mi easy.", miles: 5 },
+    { d: 1, type: "tempo", title: "Tempo", detail: "1 mi easy → 3 mi @ tempo → 1 mi easy.", miles: 5, segments: tempoSegs(1, 3, "tempo", 1) },
     { d: 2, type: "easy", title: "Easy run", detail: "4 mi conversational.", miles: 4 },
     XT(3),
     { d: 4, type: "easy", title: "Easy run", detail: "2 mi very relaxed.", miles: 2 },
@@ -248,7 +324,7 @@ export const PLAN: Week[] = [
   // ── PHASE 4 · TAPER ──
   wk(17, "Taper", "2026-09-28", "Volume drops ~45%. Fitness rises while you rest.", [
     STR(0),
-    { d: 1, type: "tempo", title: "MP tempo", detail: "1 mi easy → 2 mi @ marathon pace → 1 mi easy.", miles: 4 },
+    { d: 1, type: "tempo", title: "MP tempo", detail: "1 mi easy → 2 mi @ marathon pace → 1 mi easy.", miles: 4, segments: tempoSegs(1, 2, "marathon", 1, "Marathon pace") },
     { d: 2, type: "easy", title: "Easy run", detail: "3 mi conversational.", miles: 3 },
     { d: 5, type: "long", title: "Long run — taper", detail: "10 mi relaxed. Last long effort. Sleep is now a workout.", miles: 10 }
   ]),

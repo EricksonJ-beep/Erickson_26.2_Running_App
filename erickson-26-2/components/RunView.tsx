@@ -12,6 +12,7 @@ import { useGps, GpsResult } from "@/lib/useGps";
 import { useHeartRate } from "@/lib/useHeartRate";
 import { useWakeLock } from "@/lib/useWakeLock";
 import { useCues } from "@/lib/useCues";
+import { useSegmentRunner, segmentPreview } from "@/lib/segments";
 import {
   getProfile, addRun, clearLiveRun, saveLiveRun, LiveRunCheckpoint, RecoveryTest
 } from "@/lib/storage";
@@ -92,11 +93,7 @@ export default function RunView({
   mutedRef.current = !voiceOn;
 
   const profile = getProfile();
-  const paceKey = bandKeyFor(workout.type, workout.date); // undefined for a free run → no target
-  const judge = workout.type !== "intervals"; // HR lags, reps are short — coach by feel
-  const paceBand = paceKey ? PACE_BANDS[paceKey] : null;
-  const heartBand = paceKey ? hrBand(profile, paceKey) : null;
-  const guide = paceKey ? hrGuide(profile)[paceKey] : null;
+  const basePaceKey = bandKeyFor(workout.type, workout.date); // undefined for a free run → no target
   const zones = computeZones(profile);
 
   const gps = useGps(phase === "countdown" || phase === "live");
@@ -129,16 +126,53 @@ export default function RunView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Loud cues (alert/info gain 0.9/0.55, speech at full volume) so they punch
+  // through music outdoors — a browser PWA can't duck Spotify. Shared engine.
+  const { ensureAudio, tone, cue } = useCues(mutedRef, {
+    alertGain: 0.9,
+    infoGain: 0.55,
+    speechVolume: 1,
+    speechRate: 0.98
+  });
+
+  // Structured-workout segment runner (intervals / tempo / progression). Walks
+  // the segments live, auto-advances, and speaks each one; inert on plain runs.
+  const seg = useSegmentRunner({
+    segments: workout.segments,
+    miles: gps.miles,
+    movingSec: gps.movingSec,
+    running: phase === "live",
+    cue,
+    resume: resume?.seg ?? null
+  });
+
+  // Effective pace/HR target: the current segment's when a structured workout
+  // is running, else the workout-level band. Null → no target (effort rep,
+  // recovery jog, free run) → numbers shown neutral, no drift nagging.
+  const paceKey = seg.active ? seg.paceKey : basePaceKey;
+  const paceBand = paceKey ? PACE_BANDS[paceKey] : null;
+  const heartBand = paceKey ? hrBand(profile, paceKey) : null;
+  const guide = paceKey ? hrGuide(profile)[paceKey] : null;
+  // Color pace/HR against the band only when there is one — and preserve the
+  // old "don't judge a plain interval run" behavior for segment-less intervals.
+  const judge = paceKey != null && (seg.active || workout.type !== "intervals");
+
   // Crash-recovery checkpoint: persist the run in flight every CHECKPOINT_MS,
   // plus immediately on backgrounding (the moment Android is most likely to
-  // kill us) and at GO. Cleared only on an explicit save or discard — so a
-  // kill during the summary or HRR test still leaves the run recoverable.
+  // kill us) and at GO. Includes the segment position so a recovered interval
+  // run resumes on the right rep. Cleared only on save/discard.
   useEffect(() => {
     if (phase !== "live") return;
     const writeCheckpoint = () => {
       const g = gps.checkpoint();
       if (!g) return;
-      saveLiveRun({ workout, savedAt: Date.now(), gps: g, hr: hr.totals() });
+      saveLiveRun({
+        workout,
+        savedAt: Date.now(),
+        gps: g,
+        hr: hr.totals(),
+        ...(seg.checkpoint() ? { seg: seg.checkpoint()! } : {})
+      });
     };
     writeCheckpoint();
     const id = window.setInterval(writeCheckpoint, CHECKPOINT_MS);
@@ -152,16 +186,7 @@ export default function RunView({
       document.removeEventListener("visibilitychange", onHide);
       window.removeEventListener("pagehide", writeCheckpoint);
     };
-  }, [phase, gps.checkpoint, hr.totals, workout]);
-
-  // Loud cues (alert/info gain 0.9/0.55, speech at full volume) so they punch
-  // through music outdoors — a browser PWA can't duck Spotify. Shared engine.
-  const { ensureAudio, tone, cue } = useCues(mutedRef, {
-    alertGain: 0.9,
-    infoGain: 0.55,
-    speechVolume: 1,
-    speechRate: 0.98
-  });
+  }, [phase, gps.checkpoint, hr.totals, workout, seg]);
 
   // Countdown → GO. Ticks each second with a haptic buzz + tone; at zero we
   // commit the GPS baseline (gps.start) and drop into the live screen. GPS has
@@ -202,6 +227,13 @@ export default function RunView({
   const lastCueStepRef = useRef(0);
   useEffect(() => {
     const step = Math.floor(gps.miles / cueIntervalMi + 1e-6);
+    // Structured workouts do their own segment coaching — keep the generic
+    // half-mile cadence out of the way (but track the step so it doesn't dump
+    // a backlog if it ever re-enables).
+    if (seg.active) {
+      lastCueStepRef.current = step;
+      return;
+    }
     if (step <= lastCueStepRef.current || step === 0) return;
     lastCueStepRef.current = step;
 
@@ -237,7 +269,7 @@ export default function RunView({
     if (hr.bpm != null && hr.zone != null) parts.push(`Heart rate ${hr.bpm}, zone ${hr.zone + 1}.`);
 
     cue(parts.join(" "), "info");
-  }, [gps.miles, gps.splits, gps.currentPaceSec, hr.bpm, hr.zone, paceBand, cueIntervalMi, workout.type, cue]);
+  }, [gps.miles, gps.splits, gps.currentPaceSec, hr.bpm, hr.zone, paceBand, cueIntervalMi, workout.type, cue, seg.active]);
 
   // HR drift alert — both directions, every run type, using the workout's
   // target HR band. Fires after 25 s continuously out of zone and re-arms
@@ -449,6 +481,49 @@ export default function RunView({
       reset();
     };
   }, [locked]);
+
+  // Live segment banner (structured workouts): current segment name, rep count,
+  // and either count-up distance or count-down time with a progress bar. Shared
+  // by the live screen and the lock overlay. Null on plain runs.
+  const segKindColor =
+    seg.segment?.kind === "work" ? "text-gold"
+    : seg.segment?.kind === "recovery" ? "text-sage"
+    : "text-dust";
+  const segPct = seg.isTimed
+    ? (seg.remainingSec != null && seg.segment?.until.type === "time" && seg.segment.until.seconds > 0
+        ? 1 - seg.remainingSec / seg.segment.until.seconds : 0)
+    : (seg.targetMi ? Math.min(1, seg.elapsedMi / seg.targetMi) : 0);
+  const segBanner = seg.active && seg.segment ? (
+    <div className="bg-coal rounded-xl border border-seam px-4 py-3">
+      <div className="flex items-baseline justify-between">
+        <span className="font-display font-bold text-lg text-bone leading-none">
+          {seg.segment.label}
+        </span>
+        <span className={`text-[10px] uppercase tracking-widest font-display font-bold ${segKindColor}`}>
+          {seg.segment.kind}
+          {seg.paceKey ? ` · ${PACES[seg.paceKey]}` : seg.segment.effort ? ` · ${seg.segment.effort}` : ""}
+        </span>
+      </div>
+      <div className="flex items-baseline gap-2 mt-1">
+        {seg.isTimed ? (
+          <span className="font-display font-bold text-4xl text-gold tabular-nums leading-none">
+            {fmtClock(seg.remainingSec ?? 0)}<span className="text-sm text-dust"> left</span>
+          </span>
+        ) : (
+          <span className="font-display font-bold text-4xl text-gold tabular-nums leading-none">
+            {seg.elapsedMi.toFixed(2)}
+            <span className="text-sm text-dust"> / {seg.targetMi} mi</span>
+          </span>
+        )}
+      </div>
+      <div className="mt-2 h-1.5 bg-ink rounded-full overflow-hidden">
+        <div
+          className={`h-full rounded-full ${seg.segment.kind === "recovery" ? "bg-sage" : "bg-gold"}`}
+          style={{ width: `${Math.max(0, Math.min(1, segPct)) * 100}%` }}
+        />
+      </div>
+    </div>
+  ) : null;
 
   function save() {
     if (!result) return;
@@ -727,6 +802,33 @@ export default function RunView({
               </span>
             )}
           </div>
+
+          {/* Pre-run preview — the shape of a structured session before GO */}
+          {workout.segments && workout.segments.length > 0 && (
+            <div className="mt-8 w-full text-left">
+              <div className="text-[10px] uppercase tracking-widest text-dust font-display font-semibold mb-2 text-center">
+                Tonight’s session
+              </div>
+              <div className="space-y-1.5 max-h-[38vh] overflow-y-auto">
+                {segmentPreview(workout.segments).map((s, i) => (
+                  <div
+                    key={i}
+                    className={`flex items-center gap-2.5 rounded-lg px-3 py-2 bg-coal border ${
+                      s.kind === "work" ? "border-gold/40" : "border-seam"
+                    }`}
+                  >
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                        s.kind === "work" ? "bg-gold" : s.kind === "recovery" ? "bg-sage" : "bg-dust"
+                      }`}
+                    />
+                    <span className="text-sm text-bone flex-1 leading-snug">{s.label}</span>
+                    <span className="text-[11px] text-dust tabular-nums">{s.sub}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
         <div className="mx-auto max-w-md w-full px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
           <button
@@ -757,6 +859,7 @@ export default function RunView({
               </div>
             )}
           </div>
+          {segBanner}
           <div className="text-center">
             <div className="text-[11px] uppercase tracking-widest text-dust font-display font-semibold">
               Distance
@@ -887,6 +990,9 @@ export default function RunView({
             </span>
           )}
         </div>
+
+        {/* Segment banner (structured workouts) — the live rep/interval focus */}
+        {segBanner && <div className="mt-2 mr-20">{segBanner}</div>}
 
         {/* Hero metrics */}
         <div className="flex-1 flex flex-col justify-center gap-6">
