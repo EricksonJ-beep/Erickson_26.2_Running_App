@@ -31,6 +31,15 @@ export interface RecoveryTest {
   runType?: WorkoutType; // auto-tagged from the workout, for trend filtering
 }
 
+// One structured-workout segment's actuals on a saved run (a rep or a jog),
+// so splits read per-rep instead of by smeared whole-mile boundaries.
+export interface SegSplit {
+  label: string;
+  kind: "warmup" | "work" | "recovery" | "cooldown";
+  miles: number;
+  seconds: number;
+}
+
 export interface RunLog {
   // Storage key. Absent on legacy/seeded/primary runs — those key by bare `date`
   // (one-per-day, back-compat). Additional same-day runs get `date#2`, `date#3`…
@@ -45,6 +54,7 @@ export interface RunLog {
   type?: WorkoutType; // what the run was launched as (Run Mode); manual logs omit it
   route?: RoutePoint[]; // Run Mode GPS trace, downsampled
   splits?: number[]; // per-mile seconds, Run Mode
+  segmentSplits?: SegSplit[]; // structured-workout per-segment actuals (reps + jogs separately)
   zoneSeconds?: number[]; // sec in Z1–Z5 from the strap — feeds the 80/20 meter
   recoveryTest?: RecoveryTest; // Run Mode HRR test, if run + saved
 }

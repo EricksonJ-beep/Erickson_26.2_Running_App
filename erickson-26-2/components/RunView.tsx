@@ -12,7 +12,8 @@ import { useGps, GpsResult } from "@/lib/useGps";
 import { useHeartRate } from "@/lib/useHeartRate";
 import { useWakeLock } from "@/lib/useWakeLock";
 import { useCues } from "@/lib/useCues";
-import { useSegmentRunner, segmentPreview } from "@/lib/segments";
+import { useSegmentRunner, segmentPreview, finalizeSegments } from "@/lib/segments";
+import type { SegSplit } from "@/lib/storage";
 import {
   getProfile, addRun, clearLiveRun, saveLiveRun, LiveRunCheckpoint, RecoveryTest
 } from "@/lib/storage";
@@ -107,6 +108,7 @@ export default function RunView({
     zoneSeconds: [0, 0, 0, 0, 0]
   });
   const [rpe, setRpe] = useState(5);
+  const [segSplits, setSegSplits] = useState<SegSplit[]>([]); // structured-workout per-segment actuals
   // HRR recovery test: end-of-run HR handed to the test, and its saved result.
   const [recoveryEndHR, setRecoveryEndHR] = useState<number | null>(null);
   const [recoveryResult, setRecoveryResult] = useState<RecoveryTest | null>(null);
@@ -156,6 +158,10 @@ export default function RunView({
   // Color pace/HR against the band only when there is one — and preserve the
   // old "don't judge a plain interval run" behavior for segment-less intervals.
   const judge = paceKey != null && (seg.active || workout.type !== "intervals");
+  // Live snapshot for callbacks with stable deps (doStop) — seg is a fresh
+  // object each render, so reading it via a ref avoids a stale capture.
+  const segRef = useRef(seg);
+  segRef.current = seg;
 
   // Crash-recovery checkpoint: persist the run in flight every CHECKPOINT_MS,
   // plus immediately on backgrounding (the moment Android is most likely to
@@ -271,6 +277,40 @@ export default function RunView({
     cue(parts.join(" "), "info");
   }, [gps.miles, gps.splits, gps.currentPaceSec, hr.bpm, hr.zone, paceBand, cueIntervalMi, workout.type, cue, seg.active]);
 
+  // Mid-segment updates for structured runs: every half mile WITHIN a
+  // distance segment (the paced reps especially), a pace + drift + HR call so
+  // Jon can hold race pace through the rep. Skipped on timed segments
+  // (recovery jogs / short efforts — the countdown + segment cues carry those),
+  // and skipped right at the end so it never steps on the auto-advance cue.
+  const lastSegHalfRef = useRef({ index: -1, half: 0 });
+  useEffect(() => {
+    if (!seg.active || !seg.segment || seg.isTimed) return;
+    if (lastSegHalfRef.current.index !== seg.index) {
+      lastSegHalfRef.current = { index: seg.index, half: 0 };
+    }
+    const half = Math.floor(seg.elapsedMi / 0.5 + 1e-6);
+    if (half <= lastSegHalfRef.current.half || half === 0) return;
+    if (seg.targetMi != null && seg.elapsedMi > seg.targetMi - 0.12) return; // advance cue imminent
+    lastSegHalfRef.current.half = half;
+
+    const paceSec = gps.currentPaceSec;
+    const parts: string[] = [`${seg.elapsedMi.toFixed(1)} into ${seg.segment.kind === "work" ? "the rep" : "the segment"}.`];
+    if (paceBand && paceSec != null) {
+      if (paceSec >= paceBand.lo && paceSec <= paceBand.hi) {
+        parts.push(`${fmtPace(paceSec)}, on pace.`);
+      } else {
+        const fast = paceSec < paceBand.lo;
+        const raw = fast ? paceBand.lo - paceSec : paceSec - paceBand.hi;
+        const d = Math.max(5, Math.round(raw / 5) * 5);
+        parts.push(fast ? `${fmtPace(paceSec)}, ${d} seconds fast.` : `${fmtPace(paceSec)}, ${d} seconds slow, pick it up.`);
+      }
+    } else if (paceSec != null) {
+      parts.push(`${fmtPace(paceSec)} pace.`);
+    }
+    if (hr.bpm != null && hr.zone != null) parts.push(`Heart rate ${hr.bpm}, zone ${hr.zone + 1}.`);
+    cue(parts.join(" "), "info");
+  }, [seg.active, seg.index, seg.isTimed, seg.elapsedMi, seg.targetMi, seg.segment, gps.currentPaceSec, hr.bpm, hr.zone, paceBand, cue]);
+
   // HR drift alert — both directions, every run type, using the workout's
   // target HR band. Fires after 25 s continuously out of zone and re-arms
   // only once HR returns. Held off during the first 3 min of moving (warmup).
@@ -353,6 +393,10 @@ export default function RunView({
   const doStop = useCallback(() => {
     const r = gps.finish();
     setResult(r);
+    // Structured workout: capture the real per-segment splits (finished reps +
+    // whatever the current segment reached), so the summary shows each rep and
+    // recovery jog on its own line instead of smeared whole-mile splits.
+    if (segRef.current.active) setSegSplits(finalizeSegments(segRef.current));
     setFinalHr({ avg: hr.avgBpm, zoneSeconds: [...hr.zoneSeconds] });
     // Default RPE: dominant HR zone if we have a minute of data, else by type
     const total = hr.zoneSeconds.reduce((a, b) => a + b, 0);
@@ -548,6 +592,7 @@ export default function RunView({
       type: workout.type,
       route: result.route,
       splits: result.splits,
+      ...(segSplits.length > 0 ? { segmentSplits: segSplits } : {}),
       // Full per-zone seconds (not just the "% Z2" note) so Progress can build
       // the weekly 80/20 intensity meter from real strap data.
       ...(totalZone > 0 ? { zoneSeconds: finalHr.zoneSeconds.map((s) => Math.round(s)) } : {}),
@@ -699,7 +744,35 @@ export default function RunView({
             </div>
           )}
 
-          {result.splits.length > 0 && (
+          {/* Structured workout → per-segment splits (reps + jogs separately) */}
+          {segSplits.length > 0 && (
+            <div className="bg-coal rounded-xl border border-seam px-4 py-3 mt-3">
+              <div className="text-[10px] uppercase tracking-widest text-dust font-display font-semibold mb-1.5">
+                Segment splits
+              </div>
+              {segSplits.map((s, i) => (
+                <div key={i} className="flex justify-between items-baseline py-0.5">
+                  <span className="text-sm text-bone flex items-center gap-1.5">
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        s.kind === "work" ? "bg-gold" : s.kind === "recovery" ? "bg-sage" : "bg-dust"
+                      }`}
+                    />
+                    {s.label}
+                  </span>
+                  <span className="text-dust tabular-nums text-xs">
+                    {s.miles.toFixed(2)} mi
+                    <span className="font-display font-semibold text-bone ml-2">
+                      {s.miles > 0.05 ? `${fmtPace(s.seconds / s.miles)}/mi` : fmtClock(s.seconds)}
+                    </span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Plain run → whole-mile splits */}
+          {segSplits.length === 0 && result.splits.length > 0 && (
             <div className="bg-coal rounded-xl border border-seam px-4 py-3 mt-3">
               <div className="text-[10px] uppercase tracking-widest text-dust font-display font-semibold mb-1.5">
                 Splits

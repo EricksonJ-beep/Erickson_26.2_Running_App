@@ -24,12 +24,24 @@ export interface SegState {
   elapsedSec: number; // time in the current segment
   targetMi: number | null; // distance-segment goal
   remainingSec: number | null; // time-segment countdown
+  completed: SegResult[]; // segments finished so far, in order
+}
+
+// A finished (or, at STOP, in-progress) segment's actuals — the real per-rep
+// split, with recovery jogs kept as their own line instead of smeared across
+// whole-mile boundaries.
+export interface SegResult {
+  label: string;
+  kind: Segment["kind"];
+  miles: number;
+  seconds: number;
 }
 
 export interface SegCheckpoint {
   index: number;
   startMi: number;
   startSec: number;
+  completed?: SegResult[]; // reps finished before a crash, so recovery keeps them
 }
 
 function fmtPace(sec: number): string {
@@ -98,7 +110,15 @@ export function useSegmentRunner(opts: {
   const startedRef = useRef(false);
   const pingedRef = useRef(false); // "ten seconds" heads-up fired for the current timed segment
   const doneRef = useRef(false);
+  const resultsRef = useRef<SegResult[]>(resume?.completed ? [...resume.completed] : []);
   const [idx, setIdx] = useState(idxRef.current); // re-render on advance
+
+  const recordDone = (s: Segment, elapsedMi: number, elapsedSec: number) => {
+    resultsRef.current = [
+      ...resultsRef.current,
+      { label: s.label, kind: s.kind, miles: elapsedMi, seconds: elapsedSec }
+    ];
+  };
 
   useEffect(() => {
     if (!segments || segments.length === 0 || !running || doneRef.current) return;
@@ -135,6 +155,7 @@ export function useSegmentRunner(opts: {
     if (!hit) return;
 
     const repPaceSec = elapsedMi > 0 ? elapsedSec / elapsedMi : 0;
+    recordDone(seg, elapsedMi, elapsedSec);
     const last = idxRef.current >= segments.length - 1;
     if (last) {
       doneRef.current = true;
@@ -182,11 +203,27 @@ export function useSegmentRunner(opts: {
     elapsedSec,
     targetMi: seg && seg.until.type === "distance" ? seg.until.miles : null,
     remainingSec: seg && seg.until.type === "time" ? Math.max(0, seg.until.seconds - elapsedSec) : null,
+    completed: resultsRef.current,
     checkpoint: () =>
       active && !doneRef.current
-        ? { index: idxRef.current, startMi: startMiRef.current, startSec: startSecRef.current }
+        ? {
+            index: idxRef.current,
+            startMi: startMiRef.current,
+            startSec: startSecRef.current,
+            completed: resultsRef.current
+          }
         : null
   };
+}
+
+// Completed segment results plus the current in-progress segment (for STOP
+// mid-rep), so the summary shows every rep — not smeared mile splits.
+export function finalizeSegments(s: SegState): SegResult[] {
+  const out = [...s.completed];
+  if (s.segment && !s.done && (s.elapsedMi > 0.02 || s.elapsedSec > 3)) {
+    out.push({ label: s.segment.label, kind: s.segment.kind, miles: s.elapsedMi, seconds: s.elapsedSec });
+  }
+  return out;
 }
 
 // Static preview rows for the pre-run screen (no live state).

@@ -356,7 +356,29 @@ export default function LogView() {
                           </div>
                         );
                       })()}
-                      {r.splits && r.splits.length > 0 && (
+                      {/* Structured workout: per-segment splits (reps + jogs) */}
+                      {r.segmentSplits && r.segmentSplits.length > 0 ? (
+                        <div className="mt-2 space-y-0.5">
+                          {r.segmentSplits.map((s, i) => (
+                            <div key={i} className="flex justify-between items-baseline text-[11px]">
+                              <span className="text-bone/80 flex items-center gap-1.5">
+                                <span
+                                  className={`w-1.5 h-1.5 rounded-full ${
+                                    s.kind === "work" ? "bg-gold" : s.kind === "recovery" ? "bg-sage" : "bg-dust"
+                                  }`}
+                                />
+                                {s.label}
+                              </span>
+                              <span className="text-dust tabular-nums">
+                                {s.miles.toFixed(2)} mi
+                                <span className="text-bone/70 ml-2">
+                                  {s.miles > 0.05 ? `${fmtSplit(s.seconds / s.miles)}/mi` : fmtSplit(s.seconds)}
+                                </span>
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : r.splits && r.splits.length > 0 ? (
                         <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
                           {r.splits.map((s, i) => (
                             <span key={i} className="text-[11px] text-dust tabular-nums">
@@ -364,7 +386,7 @@ export default function LogView() {
                             </span>
                           ))}
                         </div>
-                      )}
+                      ) : null}
                     </div>
                   )}
                 </div>
