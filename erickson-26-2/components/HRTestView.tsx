@@ -66,8 +66,16 @@ function mmss(sec: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-export default function HRTestView({ onClose, onSaved }: { onClose: () => void; onSaved?: () => void }) {
-  const [test, setTest] = useState<TestId | null>(null);
+export default function HRTestView({
+  onClose,
+  onSaved,
+  initialTest
+}: {
+  onClose: () => void;
+  onSaved?: () => void;
+  initialTest?: TestId; // deep-link straight into a test (e.g. the Today card → max HR)
+}) {
+  const [test, setTest] = useState<TestId | null>(initialTest ?? null);
   const [phase, setPhase] = useState<Phase>("intro");
   const [elapsed, setElapsed] = useState(0);
   const [result, setResult] = useState<number | null>(null);

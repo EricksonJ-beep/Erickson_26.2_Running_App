@@ -8,6 +8,7 @@ import {
 import { hrGuide, bandKeyFor } from "@/lib/zones";
 import { TYPE_EFFORT } from "@/lib/guide";
 import RunView from "@/components/RunView";
+import HRTestView from "@/components/HRTestView";
 import { quoteForDate } from "@/lib/quotes";
 import {
   addCalis, CALIS_GOAL, clearLiveRun, getCalis, getDone, getLiveRun, getProfile, getRuns,
@@ -23,6 +24,7 @@ export default function TodayView({ onGoLog }: { onGoLog: () => void }) {
   const [pendingRecovery, setPendingRecovery] = useState<LiveRunCheckpoint | null>(null);
   const [resumeCp, setResumeCp] = useState<LiveRunCheckpoint | null>(null);
   const [, force] = useState(0);
+  const [maxTest, setMaxTest] = useState(false); // Max HR test fullscreen open
   // Native app only: a newer APK is on GitHub (rare — native-layer changes only)
   const [update, setUpdate] = useState<UpdateInfo | null>(null);
   useEffect(() => {
@@ -61,9 +63,13 @@ export default function TodayView({ onGoLog }: { onGoLog: () => void }) {
   const toFull = daysUntil(FULL_DATE, today);
 
   const isRest = !workout;
-  const guide = hrGuide(getProfile());
+  const profile = getProfile();
+  const guide = hrGuide(profile);
   const paceKey = workout ? bandKeyFor(workout.type, workout.date) : undefined;
   const isRace = workout?.type === "race";
+  // Zones still on the age estimate → surface the Max HR test on Today until a
+  // real max is measured (then it clears itself and every zone sharpens).
+  const needsMaxHR = !profile.maxHR;
 
   return (
     <div className="space-y-4">
@@ -79,6 +85,15 @@ export default function TodayView({ onGoLog }: { onGoLog: () => void }) {
             setPendingRecovery(getLiveRun()); // still set if the run wasn't saved/discarded
             force((n) => n + 1);
           }}
+        />
+      )}
+
+      {/* Max HR test — fullscreen, deep-linked straight to the max-HR protocol */}
+      {maxTest && (
+        <HRTestView
+          initialTest="maxhr"
+          onClose={() => setMaxTest(false)}
+          onSaved={() => force((n) => n + 1)}
         />
       )}
 
@@ -331,6 +346,30 @@ export default function TodayView({ onGoLog }: { onGoLog: () => void }) {
           )}
         </div>
       </div>
+
+      {/* Max HR test — recommended until a real max is measured (zones run on
+          the age estimate until then). Do it fresh, before an easy run. */}
+      {needsMaxHR && (
+        <div className="bg-coal rounded-xl border border-gold/40 px-4 py-3.5">
+          <div className="flex items-center justify-between">
+            <div className="text-[11px] uppercase tracking-widest text-gold font-display font-bold">
+              ⚡ Max HR test — recommended
+            </div>
+            <span className="text-[10px] text-dust">~8 min</span>
+          </div>
+          <p className="text-xs text-bone/90 mt-1 leading-snug">
+            Your zones are still using an age estimate. Measure your true max with the strap and
+            every target sharpens instantly. Warm up first, then it walks you through a graded
+            build to an all-out finish — do it fresh, before tonight&apos;s easy miles.
+          </p>
+          <button
+            onClick={() => setMaxTest(true)}
+            className="mt-3 w-full bg-gold text-ink font-display font-bold tracking-widest uppercase rounded-lg py-3 text-sm min-h-[48px]"
+          >
+            Start max HR test
+          </button>
+        </div>
+      )}
 
       {/* Free run — launch Run Mode any day (even rest/cross-train), no plan
           workout needed. Full GPS/HR/split tracking, no pace target. */}
