@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { getPlan, findWeek, todayISO, Workout, WorkoutType } from "@/lib/plan";
 import { EFFORT_GUIDE, RACE_INTEL, ROADBLOCKS, FUELING_GUIDE, FUEL_NOTE, FuelGuide } from "@/lib/guide";
+import { HALF_FUEL } from "@/lib/raceFuel";
+import RaceFuelView from "@/components/RaceFuelView";
 import { hrGuide, bandKeyFor } from "@/lib/zones";
 import { getDone, getProfile, getRuns, movePlannedRun } from "@/lib/storage";
 
@@ -36,6 +38,7 @@ export default function PlanView() {
   const [today, setToday] = useState("");
   const [open, setOpen] = useState<number | null>(null);
   const [, force] = useState(0); // re-render after a workout is moved
+  const [fuelPlan, setFuelPlan] = useState(false); // race-week fueling plan fullscreen
   useEffect(() => {
     const t = todayISO();
     setToday(t);
@@ -61,6 +64,8 @@ export default function PlanView() {
 
   return (
     <div className="space-y-2">
+      {fuelPlan && <RaceFuelView onClose={() => setFuelPlan(false)} />}
+
       {/* Phase progress header */}
       {currentWeekObj && (
         <div className="bg-coal rounded-xl border border-gold/30 px-4 py-3 mb-3">
@@ -237,6 +242,23 @@ export default function PlanView() {
           Fueling &amp; hydration
         </div>
         <p className="text-[11px] text-dust px-1 mb-2 leading-snug">{FUEL_NOTE}</p>
+
+        {/* Race-week plan — date-specific, sits above the evergreen playbook */}
+        <button
+          onClick={() => setFuelPlan(true)}
+          className="w-full bg-coal rounded-xl border border-gold/40 px-4 py-3.5 mb-2 flex items-center justify-between text-left min-h-[48px]"
+        >
+          <div className="min-w-0">
+            <div className="font-display font-bold tracking-widest uppercase text-gold text-sm">
+              🍝 Half race-week plan
+            </div>
+            <div className="text-[11px] text-dust mt-0.5 leading-snug">
+              {HALF_FUEL.race} · meal-by-meal for Thu, Fri &amp; race morning.
+            </div>
+          </div>
+          <span className="text-gold text-xl shrink-0 ml-3">→</span>
+        </button>
+
         <div className="space-y-2">
           {FUELING_GUIDE.map((g) => (
             <GuideCard key={g.title} title={g.title}>

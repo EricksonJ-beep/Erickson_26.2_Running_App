@@ -9,6 +9,8 @@ import { hrGuide, bandKeyFor } from "@/lib/zones";
 import { TYPE_EFFORT } from "@/lib/guide";
 import RunView from "@/components/RunView";
 import HRTestView from "@/components/HRTestView";
+import RaceFuelView from "@/components/RaceFuelView";
+import { HALF_FUEL } from "@/lib/raceFuel";
 import { quoteForDate } from "@/lib/quotes";
 import {
   addCalis, CALIS_GOAL, clearLiveRun, getCalis, getDone, getLiveRun, getProfile, getRuns,
@@ -25,6 +27,7 @@ export default function TodayView({ onGoLog }: { onGoLog: () => void }) {
   const [resumeCp, setResumeCp] = useState<LiveRunCheckpoint | null>(null);
   const [, force] = useState(0);
   const [maxTest, setMaxTest] = useState(false); // Max HR test fullscreen open
+  const [fuelPlan, setFuelPlan] = useState(false); // Race-week fueling plan fullscreen open
   // Native app only: a newer APK is on GitHub (rare — native-layer changes only)
   const [update, setUpdate] = useState<UpdateInfo | null>(null);
   useEffect(() => {
@@ -67,6 +70,10 @@ export default function TodayView({ onGoLog }: { onGoLog: () => void }) {
   const guide = hrGuide(profile);
   const paceKey = workout ? bandKeyFor(workout.type, workout.date) : undefined;
   const isRace = workout?.type === "race";
+  // Race week for the half — surface the meal-by-meal fueling plan on Today
+  // from the Monday of race week through race day itself.
+  const fuelWeek = toHalf >= 0 && toHalf <= 6;
+  const fuelDay = HALF_FUEL.days.find((d) => d.date === today);
   // Zones still on the age estimate → surface the Max HR test on Today until a
   // real max is measured (then it clears itself and every zone sharpens).
   const needsMaxHR = !profile.maxHR;
@@ -96,6 +103,9 @@ export default function TodayView({ onGoLog }: { onGoLog: () => void }) {
           onSaved={() => force((n) => n + 1)}
         />
       )}
+
+      {/* Race-week fueling plan — fullscreen, day-by-day */}
+      {fuelPlan && <RaceFuelView onClose={() => setFuelPlan(false)} />}
 
       {/* Interrupted-run recovery — a checkpoint survived a page kill */}
       {pendingRecovery && (
@@ -346,6 +356,27 @@ export default function TodayView({ onGoLog }: { onGoLog: () => void }) {
           )}
         </div>
       </div>
+
+      {/* Race-week fueling — the meal-by-meal plan for the half. Only shows
+          during race week; opens straight to today's page. */}
+      {fuelWeek && (
+        <button
+          onClick={() => setFuelPlan(true)}
+          className="w-full bg-coal rounded-xl border border-gold/40 px-4 py-3.5 flex items-center justify-between text-left min-h-[48px]"
+        >
+          <div className="min-w-0">
+            <div className="font-display font-bold tracking-widest uppercase text-gold text-sm">
+              🍝 Race fueling plan
+            </div>
+            <div className="text-[11px] text-dust mt-0.5 leading-snug">
+              {fuelDay
+                ? `${fuelDay.label} · ${fuelDay.tag} — what to eat, when.`
+                : `Chippewa Falls in ${toHalf} ${toHalf === 1 ? "day" : "days"} — the Thu/Fri/race-morning plan.`}
+            </div>
+          </div>
+          <span className="text-gold text-xl shrink-0 ml-3">→</span>
+        </button>
+      )}
 
       {/* Max HR test — recommended until a real max is measured (zones run on
           the age estimate until then). Do it fresh, before an easy run. */}

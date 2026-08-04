@@ -150,6 +150,15 @@ Single page, four bottom tabs (`app/page.tsx`): **Today · Plan · Log · Progre
   progression tied to long runs, and a cheat sheet. Reference content only — the interactive tools
   the source doc floated (fuel calculator, sweat-rate logger, gut-training tracker, race-day timeline
   generator) were considered and **declined by Jon**; don't re-pitch them unless he asks.
+- **Race-week fueling plan** (`lib/raceFuel.ts` + `components/RaceFuelView.tsx`) — the *date-specific*
+  counterpart to the evergreen playbook above: meal-by-meal execution for the Chippewa half
+  (Thu Aug 6 "build" → Fri Aug 7 "top off / low-residue, fiber under 20 g" → Sat Aug 8 race morning
+  timeline + breakfast options + on-course intake), plus a Ref tab (two-tank physiology, carb lookup
+  table, "the three that matter"). Fullscreen, day-tabbed, opens on today's day. Reached from a
+  **Today card that only appears during race week** (`toHalf` 0–6) and from a card at the top of
+  Plan → Fueling & hydration. Source doc was written for a ~90 min finish; the app's target is
+  sub-2:00, so `HALF_FUEL.paceNote` reconciles it (third gel, ~60–80 g on course) — shown as a
+  "Pace check" callout on the race-day tab. Nothing is logged.
 - **Daily Fire** (`lib/quotes.ts`) — 39 quotes, one chosen per day, shown in full (stationary) on Today.
 - **Body composition** (`BodyLog`) — Renpho scale readings, seeded from chat screenshots,
   trended in Progress.
