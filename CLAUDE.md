@@ -66,7 +66,16 @@ Single page, four bottom tabs (`app/page.tsx`): **Today · Plan · Log · Progre
   tone + vibrate, master 🔊/🔇 mute): pace+HR cue every ½ mile (`cueIntervalMi`), pace coached to the
   workout's goal band, both-direction HR drift alerts (25 s debounce, 3 min warmup hold), plus
   spoken "Heart rate signal lost/reconnected" and "GPS signal lost/back" (`GPS_STALE_MS` 12 s via
-  `useGps.lastFixAt`). Tones are loud (alert/info gain 0.9/0.55) to punch through music — a browser
+  `useGps.lastFixAt`). **Race day has its own voice** (`RACE_CUES` in `plan.ts`, keyed by pace band
+  — `halfRace` = every ¼ mi, `marathon` = every ½ mi): cues lead with distance → pace → on-pace/
+  seconds-over → **running average**, whole miles swap in the real split and add a spoken projected
+  finish ("on pace for 1 hour 57"), **HR is appended only every 3rd mile** and **HR drift alerts are
+  suppressed entirely** (racing lives above the training band on purpose). Plus a **redline alert**:
+  pace past `redlineSec` (half = **9:00 flat**, Jon's sub-2:00 line, deliberately tighter than the
+  9:10 band top) for 20 s → alert cue, re-armed only once pace is 5 s back under, min 60 s apart,
+  held off for the first ¼ mi (starting corral). On race day `paceBand`'s top is narrowed to
+  `redlineSec` so the on-screen pace color and the voice use one rule, and the header reads
+  "Target 9:00 /mi · pace every ¼ mi" instead of the HR window. Tones are loud (alert/info gain 0.9/0.55) to punch through music — a browser
   PWA can't actually duck Spotify — but the **native app speaks via Android TTS with audio focus
   (`useCues` → `@capacitor-community/text-to-speech`), so cues duck music there** (M3, Jul 14).
   **Mid-run HR re-pair:**

@@ -65,6 +65,22 @@ export const PACE_BANDS: Record<keyof typeof PACES, { lo: number; hi: number }> 
   marathon: { lo: 575, hi: 585 }
 };
 
+// Race-day voice profile — how Run Mode talks on a race bib, and only then.
+// Racing is a pace job, so the cadence tightens, heart rate drops to an
+// occasional nice-to-know, and a redline gets its own alert the moment pace
+// drifts past it. `redlineSec` is deliberately the goal number, not the top of
+// the ±10 s PACE_BAND: for the half it's 9:00 flat, the average Jon has to hold
+// to break 2:00 (the 9:10 band top would let him sleepwalk past the line).
+export interface RaceCueProfile {
+  everyMi: number; // spoken pace update cadence
+  hrEveryMi: number; // heart rate gets appended on these whole-mile marks
+  redlineSec: number; // pace slower than this triggers its own alert
+}
+export const RACE_CUES: Partial<Record<keyof typeof PACES, RaceCueProfile>> = {
+  halfRace: { everyMi: 0.25, hrEveryMi: 3, redlineSec: 540 }, // 9:00 — the sub-2:00 line
+  marathon: { everyMi: 0.5, hrEveryMi: 3, redlineSec: 585 } // 9:45 — 26.2 is too long for quarters
+};
+
 // HR zones + per-workout targets now live in lib/zones.ts,
 // computed from the profile (Settings on the Progress tab).
 

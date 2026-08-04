@@ -3,9 +3,9 @@
 // Run Mode — fullscreen live tracker. Read at arm's length mid-run:
 // huge numbers, low density, 48px+ touch targets.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  PACES, PACE_BANDS, Workout, WorkoutType
+  PACES, PACE_BANDS, RACE_CUES, Workout, WorkoutType
 } from "@/lib/plan";
 import { hrBand, hrGuide, computeZones, bandKeyFor } from "@/lib/zones";
 import { useGps, GpsResult } from "@/lib/useGps";
@@ -40,6 +40,17 @@ const GPS_STALE_MS = 12_000;
 // moment; at 10 s the worst case is losing a few strides, not the run.
 const CHECKPOINT_MS = 10_000;
 
+// Race-day redline alert (see RACE_CUES in plan.ts). Pace has to sit past the
+// line this long before it speaks — a single slow GPS window on a corner or a
+// water stop isn't a problem worth a voice in your ear. Once it fires it stays
+// quiet until pace comes back under the line (with hysteresis) AND the gap has
+// passed, so a genuinely slow patch nags at most once a minute.
+const REDLINE_HOLD_MS = 20_000;
+const REDLINE_GAP_MS = 60_000;
+const REDLINE_CLEAR_SEC = 5; // must get this far back under the line to re-arm
+// Starting corral: the first quarter mile is elbows and shuffling, not pacing.
+const REDLINE_START_MI = 0.25;
+
 function fmtPace(sec: number | null): string {
   if (sec === null || !isFinite(sec) || sec <= 0) return "—";
   const m = Math.floor(sec / 60);
@@ -55,6 +66,17 @@ function fmtClock(totalSec: number): string {
   return h > 0
     ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
     : `${m}:${String(s).padStart(2, "0")}`;
+}
+
+// A finish-time projection read aloud. "1:57:40" gets mangled by TTS, so it
+// speaks in words and rounds to the minute — the sub-2:00 question only ever
+// turns on minutes.
+function fmtSpokenClock(totalSec: number): string {
+  const mins = Math.round(totalSec / 60);
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h === 0) return `${m} minutes`;
+  return `${h} hour${h > 1 ? "s" : ""}${m > 0 ? ` ${m}` : ""}`;
 }
 
 type StatusColor = "text-gold" | "text-ember" | "text-bone";
@@ -95,6 +117,10 @@ export default function RunView({
 
   const profile = getProfile();
   const basePaceKey = bandKeyFor(workout.type, workout.date); // undefined for a free run → no target
+  // Race day gets its own voice: pace is the whole job, so cues come more
+  // often, lead with pace and running average, and heart rate drops back to an
+  // occasional nice-to-know. Everything else runs the normal half-mile cadence.
+  const raceCue = basePaceKey && workout.type === "race" ? RACE_CUES[basePaceKey] : undefined;
   const zones = computeZones(profile);
 
   const gps = useGps(phase === "countdown" || phase === "live");
@@ -152,7 +178,14 @@ export default function RunView({
   // is running, else the workout-level band. Null → no target (effort rep,
   // recovery jog, free run) → numbers shown neutral, no drift nagging.
   const paceKey = seg.active ? seg.paceKey : basePaceKey;
-  const paceBand = paceKey ? PACE_BANDS[paceKey] : null;
+  // On a race bib the redline IS the top of the band, so the number the screen
+  // colors against and the number the voice calls out are the same rule (9:00
+  // for the half, not the 9:10 edge of the ±10 s training band).
+  const paceBand = useMemo(() => {
+    const b = paceKey ? PACE_BANDS[paceKey] : null;
+    if (!b) return null;
+    return raceCue ? { lo: b.lo, hi: raceCue.redlineSec } : b;
+  }, [paceKey, raceCue]);
   const heartBand = paceKey ? hrBand(profile, paceKey) : null;
   const guide = paceKey ? hrGuide(profile)[paceKey] : null;
   // Color pace/HR against the band only when there is one — and preserve the
@@ -226,10 +259,11 @@ export default function RunView({
   }, [phase, count]);
 
   // Cadence: a pace + HR cue every half mile, every run length (Jon's getting
-  // used to the app and likes the frequency). Cue points on a whole mile
-  // announce that mile's split; the rest use trailing pace. Drift alerts
-  // (HR / pace out of band) are separate and fire independently.
-  const cueIntervalMi = 0.5;
+  // used to the app and likes the frequency) — every quarter mile on a race
+  // bib. Cue points on a whole mile announce that mile's split; the rest use
+  // trailing pace. Drift alerts (HR / pace out of band) are separate and fire
+  // independently.
+  const cueIntervalMi = raceCue?.everyMi ?? 0.5;
   const lastCueStepRef = useRef(0);
   useEffect(() => {
     const step = Math.floor(gps.miles / cueIntervalMi + 1e-6);
@@ -250,6 +284,46 @@ export default function RunView({
     const paceSec = split ?? gps.currentPaceSec;
 
     const parts: string[] = [];
+
+    // ── Race day ──────────────────────────────────────────────
+    // Distance → pace → where that sits against the redline → running
+    // average. Whole miles swap the trailing pace for the real split and add
+    // the projected finish; heart rate only rides along every hrEveryMi.
+    if (raceCue) {
+      if (split != null) parts.push(`Mile ${mileIdx}, ${fmtPace(split)}.`);
+      else
+        parts.push(
+          `${milestone.toFixed(2)} miles${paceSec != null ? `, ${fmtPace(paceSec)} pace` : ""}.`
+        );
+
+      if (paceSec != null) {
+        const over = paceSec - raceCue.redlineSec;
+        if (over > 3) {
+          parts.push(`${Math.max(5, Math.round(over / 5) * 5)} seconds over. Pick it up.`);
+        } else if (over < -20) {
+          parts.push(`${Math.max(5, Math.round(-over / 5) * 5)} seconds fast. Ease off.`);
+        } else {
+          parts.push("On pace.");
+        }
+      }
+      if (gps.avgPaceSec != null) parts.push(`Average ${fmtPace(gps.avgPaceSec)}.`);
+      // The number the race actually turns on — but only on whole miles, so
+      // the quarter-mile calls stay short.
+      if (wholeMile && gps.avgPaceSec != null && workout.miles > 0) {
+        parts.push(`On pace for ${fmtSpokenClock(gps.avgPaceSec * workout.miles)}.`);
+      }
+      if (
+        wholeMile &&
+        mileIdx % raceCue.hrEveryMi === 0 &&
+        hr.bpm != null &&
+        hr.zone != null
+      ) {
+        parts.push(`Heart rate ${hr.bpm}, zone ${hr.zone + 1}.`);
+      }
+      cue(parts.join(" "), "info");
+      return;
+    }
+
     if (split != null) parts.push(`Mile ${mileIdx}, ${fmtPace(split)}.`);
     else
       parts.push(
@@ -275,7 +349,45 @@ export default function RunView({
     if (hr.bpm != null && hr.zone != null) parts.push(`Heart rate ${hr.bpm}, zone ${hr.zone + 1}.`);
 
     cue(parts.join(" "), "info");
-  }, [gps.miles, gps.splits, gps.currentPaceSec, hr.bpm, hr.zone, paceBand, cueIntervalMi, workout.type, cue, seg.active]);
+  }, [
+    gps.miles, gps.splits, gps.currentPaceSec, gps.avgPaceSec, hr.bpm, hr.zone,
+    paceBand, cueIntervalMi, workout.type, workout.miles, raceCue, cue, seg.active
+  ]);
+
+  // Race-day redline — the one alert Jon asked for by name: the moment pace
+  // slips past goal, say so, without waiting for the next quarter-mile mark.
+  // Held off through the starting corral and while paused, debounced by
+  // REDLINE_HOLD_MS, and re-armed only once pace is genuinely back under.
+  const redlineOverSinceRef = useRef<number | null>(null);
+  const redlineArmedRef = useRef(true);
+  const redlineLastAtRef = useRef(0);
+  useEffect(() => {
+    if (phase !== "live" || !raceCue) return;
+    if (gps.paused || gps.autoPaused) return;
+    if (gps.miles < REDLINE_START_MI) return;
+    const paceSec = gps.currentPaceSec;
+    if (paceSec == null) return;
+
+    if (paceSec <= raceCue.redlineSec) {
+      redlineOverSinceRef.current = null;
+      if (paceSec <= raceCue.redlineSec - REDLINE_CLEAR_SEC) redlineArmedRef.current = true;
+      return;
+    }
+    const now = Date.now();
+    if (redlineOverSinceRef.current == null) {
+      redlineOverSinceRef.current = now;
+      return;
+    }
+    if (now - redlineOverSinceRef.current < REDLINE_HOLD_MS) return;
+    if (!redlineArmedRef.current || now - redlineLastAtRef.current < REDLINE_GAP_MS) return;
+    redlineArmedRef.current = false;
+    redlineLastAtRef.current = now;
+    const over = Math.max(5, Math.round((paceSec - raceCue.redlineSec) / 5) * 5);
+    cue(`${fmtPace(paceSec)} pace. ${over} seconds over goal. Pick it up.`, "alert");
+  }, [
+    gps.currentPaceSec, gps.miles, gps.movingSec, gps.paused, gps.autoPaused,
+    phase, raceCue, cue
+  ]);
 
   // Mid-segment updates for structured runs: every half mile WITHIN a
   // distance segment (the paced reps especially), a pace + drift + HR call so
@@ -318,6 +430,10 @@ export default function RunView({
   const hrAlertArmedRef = useRef(true);
   const hrLastDirRef = useRef<"high" | "low" | null>(null);
   useEffect(() => {
+    // Race day: HR is a passenger. Racing a half means living above the easy-day
+    // band on purpose, so a drift alert would just be noise over the top of the
+    // pace calls Jon is actually running on.
+    if (raceCue) return;
     if (!heartBand || hr.bpm === null) return;
     if (gps.movingSec < 180) {
       hrOutSinceRef.current = null;
@@ -348,7 +464,7 @@ export default function RunView({
         "alert"
       );
     }
-  }, [hr.bpm, heartBand, gps.movingSec, cue]);
+  }, [hr.bpm, heartBand, gps.movingSec, raceCue, cue]);
 
   // Spoken alert when the strap drops mid-run, and when it comes back. Only on
   // real transitions during the live run — skips the initial pairing.
@@ -997,7 +1113,13 @@ export default function RunView({
               {paceKey ? (
                 <>
                   Target {PACES[paceKey]}
-                  {guide && <> · {guide.target}</>}
+                  {/* Race day: the HR window would be noise — say how often the
+                      voice will call pace instead, since that's the coaching. */}
+                  {raceCue ? (
+                    <> · pace every {raceCue.everyMi === 0.25 ? "¼" : "½"} mi</>
+                  ) : (
+                    guide && <> · {guide.target}</>
+                  )}
                 </>
               ) : (
                 <>No target · run by feel</>
