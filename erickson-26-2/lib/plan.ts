@@ -28,6 +28,7 @@ export interface Workout {
   optional?: boolean;
   note?: string; // personal route/goal note (e.g. "Run around Big Lake")
   segments?: Segment[]; // structured-workout breakdown for Run Mode segment coaching
+  paceVoice?: boolean; // opt this run into Run Mode's pace-first race voice (see RACE_CUES)
   movedFrom?: string; // original plan date when rescheduled in-app (hr_planMoves_v1)
 }
 
@@ -176,6 +177,7 @@ interface Spec {
   optional?: boolean;
   note?: string; // personal route/goal note
   segments?: Segment[]; // structured-workout breakdown for Run Mode
+  paceVoice?: boolean; // rehearse the race-day voice on an ordinary run
 }
 
 function addDays(iso: string, n: number): string {
@@ -193,7 +195,8 @@ function wk(num: number, phase: Phase, start: string, focus: string, specs: Spec
     miles: s.miles ?? 0,
     optional: s.optional,
     note: s.note,
-    segments: s.segments
+    segments: s.segments,
+    paceVoice: s.paceVoice
   }));
   const plannedMiles = workouts.reduce((a, w) => a + w.miles, 0);
   return { num, phase, start, focus, plannedMiles, workouts };
@@ -279,8 +282,11 @@ export const PLAN: Week[] = [
     { d: 5, type: "long", title: "Long run — taper", detail: "8 mi relaxed, last 2 @ race pace. Lock in pacing feel.", miles: 8, segments: progressionSegs(6, 2, "halfRace") }
   ]),
   wk(9, "Race Week", "2026-08-03", "Chippewa Falls. Trust the work.", [
-    { d: 1, type: "easy", title: "Easy + strides", detail: "3 mi easy + 4×20-sec strides. Legs stay awake, nothing more.", miles: 3 },
-    { d: 3, type: "easy", title: "Shakeout", detail: "2 mi very easy.", miles: 2 },
+    // paceVoice: rehearse Saturday's audio (¼-mi pace calls, mile splits with
+    // total time) on the last two easy runs, so race day isn't the first time
+    // Jon hears it. Judged against the EASY band, not race pace.
+    { d: 1, type: "easy", title: "Easy + strides", detail: "3 mi easy + 4×20-sec strides. Legs stay awake, nothing more. Race-voice rehearsal: ¼-mi pace calls + mile splits.", miles: 3, paceVoice: true },
+    { d: 3, type: "easy", title: "Shakeout", detail: "2 mi very easy. Last rehearsal of the race-day audio.", miles: 2, paceVoice: true },
     { d: 5, type: "race", title: "HALF MARATHON — Chippewa Falls", detail: "13.1 @ 9:00 average → ~1:57:54, a 2-min cushion under 2:00 (9:09 is the redline). Even effort, not even splits: bank seconds on the flats, spend them on the mile 4–5 hill, collect them back on the descent. Save a gear for the uphill finish. Hydrate every station.", miles: 13.1, note: "Goal: break 2:00. Race at 9:00/mi, never let average slip past 9:09." }
   ]),
 
