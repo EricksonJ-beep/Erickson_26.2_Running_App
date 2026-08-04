@@ -82,6 +82,17 @@ function fmtSpokenElapsed(totalSec: number): string {
   return parts.length ? parts.join(" ") : "0 seconds";
 }
 
+// Pace read aloud — "8 minutes 30 seconds", "9 minutes flat". TTS reads "8:30"
+// as a clock time, and pace is the one number Jon acts on mid-race, so it gets
+// said the way he'd say it.
+function fmtSpokenPace(sec: number): string {
+  const t = Math.max(0, Math.round(sec));
+  const m = Math.floor(t / 60);
+  const s = t % 60;
+  if (s === 0) return `${m} minutes flat`;
+  return `${m} minutes ${s} second${s === 1 ? "" : "s"}`;
+}
+
 // A finish-time projection read aloud. Same reason as above, rounded to the
 // minute — the sub-2:00 question only ever turns on minutes.
 function fmtSpokenClock(totalSec: number): string {
@@ -291,6 +302,37 @@ export default function RunView({
   // independently.
   const cueIntervalMi = raceCue?.everyMi ?? 0.5;
   const lastCueStepRef = useRef(0);
+
+  // Halfway call — the one moment the race stops being about the current
+  // quarter mile and becomes about the finish: elapsed time, then what that
+  // doubles out to. Fires at the true midpoint (6.55 on a 13.1), not the next
+  // cue mark. Declared BEFORE the cadence effect on purpose, so on a short
+  // rehearsal run — where halfway can land exactly on a cue mark — it can
+  // swallow that step and the two lines never talk over each other.
+  const halfwaySaidRef = useRef(false);
+  useEffect(() => {
+    if (phase !== "live" || !raceCue || workout.miles <= 0) return;
+    if (halfwaySaidRef.current) return;
+    const halfMi = workout.miles / 2;
+    if (gps.miles < halfMi) return;
+    halfwaySaidRef.current = true;
+    // Already well past it — a recovered run restoring at mile 9 shouldn't
+    // announce "halfway". Mark it said and stay quiet.
+    if (gps.miles > halfMi + 0.35) return;
+
+    const step = Math.floor(halfMi / cueIntervalMi + 1e-6);
+    if (Math.abs(halfMi - step * cueIntervalMi) < 1e-6) lastCueStepRef.current = step;
+
+    const parts = [`Halfway. Time ${fmtSpokenElapsed(gps.movingSec)}.`];
+    if (gps.avgPaceSec != null) {
+      parts.push(`On pace for ${fmtSpokenClock(gps.avgPaceSec * workout.miles)}.`);
+    }
+    cue(parts.join(" "), "info");
+  }, [
+    gps.miles, gps.movingSec, gps.avgPaceSec, phase, raceCue, workout.miles,
+    cueIntervalMi, cue
+  ]);
+
   useEffect(() => {
     const step = Math.floor(gps.miles / cueIntervalMi + 1e-6);
     // Structured workouts do their own segment coaching — keep the generic
@@ -312,42 +354,17 @@ export default function RunView({
     const parts: string[] = [];
 
     // ── Pace-first voice (race bib, or a paceVoice rehearsal) ─────
-    // Quarter marks stay short: distance → pace → how that sits → average.
-    // Whole miles are the anchor call — "Mile 3 complete, 8:57. Total time
-    // 26 minutes 51 seconds." — then average, projected finish, and heart
-    // rate every hrEveryMi. The split is the "am I holding it?" number; the
-    // total is the "where am I?" number.
+    // Deliberately bare, per Jon: a quarter-mile mark says one thing — the
+    // pace right now — because that's the only number he can act on, and the
+    // distance is already on the screen. No average, no "on pace" verdict:
+    // going too slow is the redline alert's job, and it says so within 20 s
+    // instead of waiting for the next mark. Whole miles swap in that mile's
+    // split; heart rate rides along every hrEveryMi.
     if (raceCue) {
-      if (split != null) {
-        parts.push(`Mile ${mileIdx} complete, ${fmtPace(split)}.`);
-        parts.push(`Total time ${fmtSpokenElapsed(gps.movingSec)}.`);
-      } else {
-        // Trim the trailing zero so TTS says "half" marks as "0.5", not "0.50".
-        const said = Number(milestone.toFixed(2)).toString();
-        parts.push(`${said} miles${paceSec != null ? `, ${fmtPace(paceSec)} pace` : ""}.`);
-      }
+      if (split != null) parts.push(`Mile ${mileIdx}, ${fmtSpokenPace(split)}.`);
+      else if (paceSec != null) parts.push(`Pace ${fmtSpokenPace(paceSec)}.`);
+      else return; // no pace fix yet — nothing worth saying out loud
 
-      // paceBand.hi is the redline here (narrowed below), so slow is judged off
-      // the goal number and fast off the band's own floor — an easy-day
-      // rehearsal never gets told it's "fast" while sitting inside its band.
-      if (paceSec != null && paceBand) {
-        const over = paceSec - paceBand.hi;
-        if (over > 3) {
-          const d = Math.max(5, Math.round(over / 5) * 5);
-          parts.push(isRaceBib ? `${d} seconds over goal. Pick it up.` : `${d} seconds over target.`);
-        } else if (paceSec < paceBand.lo - 10) {
-          const d = Math.max(5, Math.round((paceBand.lo - paceSec) / 5) * 5);
-          parts.push(`${d} seconds fast. Ease off.`);
-        } else {
-          parts.push("On pace.");
-        }
-      }
-      if (gps.avgPaceSec != null) parts.push(`Average ${fmtPace(gps.avgPaceSec)}.`);
-      // The number the race actually turns on — but only on whole miles, so
-      // the quarter-mile calls stay short.
-      if (wholeMile && gps.avgPaceSec != null && workout.miles > 0) {
-        parts.push(`On pace for ${fmtSpokenClock(gps.avgPaceSec * workout.miles)}.`);
-      }
       if (
         wholeMile &&
         mileIdx % raceCue.hrEveryMi === 0 &&
@@ -386,9 +403,8 @@ export default function RunView({
 
     cue(parts.join(" "), "info");
   }, [
-    gps.miles, gps.splits, gps.currentPaceSec, gps.avgPaceSec, gps.movingSec,
-    hr.bpm, hr.zone, paceBand, cueIntervalMi, workout.type, workout.miles,
-    raceCue, isRaceBib, cue, seg.active
+    gps.miles, gps.splits, gps.currentPaceSec, hr.bpm, hr.zone, paceBand,
+    cueIntervalMi, workout.type, raceCue, cue, seg.active
   ]);
 
   // Race-day redline — the one alert Jon asked for by name: the moment pace
@@ -422,8 +438,8 @@ export default function RunView({
     const over = Math.max(5, Math.round((paceSec - raceCue.redlineSec) / 5) * 5);
     cue(
       isRaceBib
-        ? `${fmtPace(paceSec)} pace. ${over} seconds over goal. Pick it up.`
-        : `${fmtPace(paceSec)} pace. ${over} seconds over target.`,
+        ? `Pace ${fmtSpokenPace(paceSec)}. ${over} seconds over goal. Pick it up.`
+        : `Pace ${fmtSpokenPace(paceSec)}. ${over} seconds over target.`,
       "alert"
     );
   }, [

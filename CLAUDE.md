@@ -67,18 +67,25 @@ Single page, four bottom tabs (`app/page.tsx`): **Today · Plan · Log · Progre
   workout's goal band, both-direction HR drift alerts (25 s debounce, 3 min warmup hold), plus
   spoken "Heart rate signal lost/reconnected" and "GPS signal lost/back" (`GPS_STALE_MS` 12 s via
   `useGps.lastFixAt`). **Pace-first voice** (`RACE_CUES` in `plan.ts`, keyed by pace band —
-  `halfRace` = every ¼ mi, `marathon` = every ½ mi): quarter marks say distance → pace → on-pace/
-  seconds-over → **running average**; **whole miles** say "**Mile 3 complete, 8:57. Total time 26
-  minutes 51 seconds.**" then average + a spoken projected finish ("on pace for 1 hour 57")
-  (`fmtSpokenElapsed`/`fmtSpokenClock` — TTS mangles "26:51"). **HR only every 3rd mile** and **HR
-  drift alerts suppressed entirely** (racing lives above the training band on purpose). Plus a
+  `halfRace` = every ¼ mi, `marathon` = every ½ mi). **Stripped to one number per call (Jon's
+  call, Aug 4 — the earlier verbose version was never run):** a quarter mark says only
+  "**Pace 8 minutes 47 seconds.**"; a **whole mile** says only "**Mile 3, 8 minutes 57 seconds.**"
+  (that mile's split). No distance, no running average, no "on pace" verdict at the marks — going
+  too slow is the redline alert's job, and it fires within 20 s instead of waiting for a mark.
+  All times/paces are spoken in words (`fmtSpokenPace`/`fmtSpokenElapsed`/`fmtSpokenClock`) — TTS
+  reads "8:47" as a clock time. **One halfway call** at the true midpoint (`workout.miles/2` →
+  6.55 on a 13.1, not the next cue mark): "**Halfway. Time 58 minutes 30 seconds. On pace for
+  1 hour 57.**" Its effect is declared *before* the cadence effect so on a short rehearsal run,
+  where halfway can land on a cue mark, it swallows that step instead of two lines overlapping;
+  it also self-suppresses if a recovered run restores past the midpoint. **HR only every 3rd mile**
+  and **HR drift alerts suppressed entirely** (racing lives above the training band on purpose). Plus a
   **redline alert**: pace past `redlineSec` (half = **9:00 flat**, Jon's sub-2:00 line, tighter than
   the 9:10 band top) for 20 s → alert cue, re-armed only once pace is 5 s back under, min 60 s
   apart, held off for the first ¼ mi (starting corral). `paceBand`'s top is narrowed to `redlineSec`
   so the on-screen pace color and the voice use one rule, and the header reads "Target 9:00 /mi ·
   pace every ¼ mi" instead of the HR window. **Any run can opt in** via `Workout.paceVoice` — same
-  format/cadence but `redlineSec` = that run's own band top, and non-bib runs drop the imperative
-  ("15 seconds over target", never "pick it up"), so a shakeout is never coached to chase race pace.
+  format/cadence/halfway call but `redlineSec` = that run's own band top, and non-bib runs drop the
+  imperative ("15 seconds over target", never "pick it up"), so a shakeout is never coached to chase race pace.
   Set on **wk 9 Tue Aug 4 + Thu Aug 6** as race-audio rehearsals. Tones are loud (alert/info gain 0.9/0.55) to punch through music — a browser
   PWA can't actually duck Spotify — but the **native app speaks via Android TTS with audio focus
   (`useCues` → `@capacitor-community/text-to-speech`), so cues duck music there** (M3, Jul 14).
