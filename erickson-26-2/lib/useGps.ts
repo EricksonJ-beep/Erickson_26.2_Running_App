@@ -329,7 +329,16 @@ export function useGps(active: boolean) {
                 return; // other errors: keep watching — signal often returns
               }
               if (!position || position.simulated) return;
-              gotFix = true;
+              // First native fix → lock to native for good and cancel the
+              // acquisition safety net, so a later gap (tunnel, screen off)
+              // can never downgrade a working native watcher to web GPS.
+              if (!gotFix) {
+                gotFix = true;
+                if (livenessTimer != null) {
+                  window.clearTimeout(livenessTimer);
+                  livenessTimer = null;
+                }
+              }
               onFix(position.latitude, position.longitude, position.accuracy, position.altitude);
             }
           )
@@ -341,16 +350,19 @@ export function useGps(active: boolean) {
               native.removeWatcher({ id }).catch(() => {});
               return;
             }
-            // Liveness net: a registered watcher that never delivers a fix
-            // (device/OS quirk) must not strand the run on "Acquiring" —
-            // swap to the web source Sensor check has proven works.
+            // Acquisition safety net: only if the watcher registers but NEVER
+            // delivers a fix (a genuinely broken plugin) do we fall back to web.
+            // Generous window — a cold GPS lock outdoors can take 30–45 s, and
+            // tripping early was silently stranding whole runs on screen-on-only
+            // web GPS (the "drops when the screen turns off" bug). Cancelled the
+            // instant the first native fix arrives.
             livenessTimer = window.setTimeout(() => {
               if (removed || gotFix) return;
-              noteTrapped("native GPS watcher silent for 12 s → web fallback");
+              noteTrapped("native GPS watcher silent for 45 s → web fallback");
               native.removeWatcher({ id }).catch(() => {});
               watcherId = null;
               startWebWatch();
-            }, 12_000);
+            }, 45_000);
           })
           .catch((e) => {
             if (removed) return;
