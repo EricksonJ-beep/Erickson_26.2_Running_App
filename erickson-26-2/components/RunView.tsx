@@ -154,7 +154,10 @@ export default function RunView({
     if (!basePaceKey) return undefined; // free run — no target, nothing to pace against
     if (workout.type === "race") return RACE_CUES[basePaceKey];
     if (workout.paceVoice) {
-      return { everyMi: 0.25, hrEveryMi: 3, redlineSec: PACE_BANDS[basePaceKey].hi };
+      // Borrow the named race's cadence (default: the half's); the redline is
+      // always this run's own band top, so the rehearsal never chases race pace.
+      const from = RACE_CUES[workout.paceVoice === true ? "halfRace" : workout.paceVoice];
+      return { ...(from ?? { everyMi: 0.25, hrEveryMi: 3 }), redlineSec: PACE_BANDS[basePaceKey].hi };
     }
     return undefined;
   }, [basePaceKey, workout.type, workout.paceVoice]);

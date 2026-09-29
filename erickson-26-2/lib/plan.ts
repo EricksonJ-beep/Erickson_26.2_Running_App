@@ -28,7 +28,11 @@ export interface Workout {
   optional?: boolean;
   note?: string; // personal route/goal note (e.g. "Run around Big Lake")
   segments?: Segment[]; // structured-workout breakdown for Run Mode segment coaching
-  paceVoice?: boolean; // opt this run into Run Mode's pace-first race voice (see RACE_CUES)
+  // Opt this run into Run Mode's pace-first race voice (see RACE_CUES). `true`
+  // = the half's cadence; a profile key borrows that race's cadence (½-mi calls,
+  // HR every 4th mile, checkpoint times) while the redline stays this run's own
+  // band — a marathon rehearsal on an easy long run is never coached to 9:00.
+  paceVoice?: boolean | "halfRace" | "marathon";
   movedFrom?: string; // original plan date when rescheduled in-app (hr_planMoves_v1)
 }
 
@@ -185,7 +189,7 @@ interface Spec {
   optional?: boolean;
   note?: string; // personal route/goal note
   segments?: Segment[]; // structured-workout breakdown for Run Mode
-  paceVoice?: boolean; // rehearse the race-day voice on an ordinary run
+  paceVoice?: boolean | "halfRace" | "marathon"; // rehearse a race-day voice on an ordinary run
 }
 
 function addDays(iso: string, n: number): string {
@@ -356,7 +360,10 @@ export const PLAN: Week[] = [
     STR(0),
     { d: 1, type: "tempo", title: "MP tempo", detail: "1 mi easy → 2 mi @ marathon pace → 1 mi easy.", miles: 4, segments: tempoSegs(1, 2, "marathon", 1, "Marathon pace") },
     { d: 2, type: "easy", title: "Easy run", detail: "3 mi conversational.", miles: 3 },
-    { d: 5, type: "long", title: "Long run — taper", detail: "10 mi relaxed. Last long effort. Sleep is now a workout.", miles: 10 }
+    // paceVoice "marathon": rehearse Ashland's audio at long-run effort — ½-mi
+    // pace calls, mile splits, HR at 4 and 8, halfway time at 5. Redline is this
+    // run's own 11:15, not 9:00 (Jon: "I will not be running that at 9 minute paces").
+    { d: 5, type: "long", title: "Long run — taper", detail: "10 mi relaxed. Last long effort. Sleep is now a workout. Marathon-voice rehearsal: ½-mi pace calls, mile splits, HR every 4th mile, halfway time — at easy pace.", miles: 10, paceVoice: "marathon" }
   ]),
   wk(18, "Race Week", "2026-10-05", "Ashland. 26.2. Run the first 20 with your head, the last 10K with your heart.", [
     { d: 1, type: "easy", title: "Easy + strides", detail: "3 mi easy + 4×20-sec strides.", miles: 3 },

@@ -231,7 +231,10 @@ another run" (won't overwrite; a hint says so); history rows key/edit/delete by 
       the 13.1 halfway call, which already fires on a 26.2 bib). Fixed `fmtPace`-style formatters in
       RunView/LogView/DiagnosticsView/segments that floored minutes and rounded seconds separately
       → "8:60" on screen and "8 minutes 60 seconds" in the non-race voice; now round whole seconds
-      first.
+      first. **`paceVoice` now takes `true | "halfRace" | "marathon"`** — a key borrows that race's
+      cadence/HR/checkpoint profile while the redline stays the run's own band top. Set
+      `"marathon"` on **wk 17 Sat Oct 3 (10 mi taper long run)** as the Ashland audio rehearsal at
+      easy pace (Jon: not running it at 9:00).
 - [x] **Session Sep 29 2026 (2) — Run Mode once-over for "runs stopping / GPS drops when the
       screen turns on".** Three code fixes (web-only, ship OTA): **(1)** `useGps` stamps each fix
       with the receiver's own time (`position.time` / `pos.timestamp`, `fixTime()`, falls back to
