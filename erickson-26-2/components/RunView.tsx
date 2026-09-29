@@ -1214,10 +1214,10 @@ export default function RunView({
         <button
           onClick={() => setLocked(true)}
           aria-label="Lock controls"
-          className="absolute right-3 top-1/2 -translate-y-1/2 z-10 w-16 h-16 rounded-full bg-coal/95 border border-seam text-bone text-2xl leading-none flex flex-col items-center justify-center shadow-lg shadow-black/40 active:scale-95 active:border-gold/60"
+          className="absolute right-3 top-1/2 -translate-y-1/2 z-10 w-20 h-20 rounded-full bg-coal/95 border-2 border-seam text-bone text-3xl leading-none flex flex-col items-center justify-center shadow-lg shadow-black/40 active:scale-95 active:border-gold/60"
         >
           🔒
-          <span className="text-[8px] font-display font-bold uppercase tracking-widest text-dust mt-0.5">
+          <span className="text-[10px] font-display font-bold uppercase tracking-widest text-dust mt-1">
             Lock
           </span>
         </button>
@@ -1261,8 +1261,9 @@ export default function RunView({
         {/* Segment banner (structured workouts) — the live rep/interval focus */}
         {segBanner && <div className="mt-2 mr-20">{segBanner}</div>}
 
-        {/* Hero metrics */}
-        <div className="flex-1 flex flex-col justify-center gap-6">
+        {/* Hero metrics — right padding keeps every number and button clear of
+            the floating Lock FAB on the right edge. */}
+        <div className="flex-1 flex flex-col justify-center gap-6 pr-24">
           <div>
             <div className="text-[11px] uppercase tracking-widest text-dust font-display font-semibold">
               Distance
@@ -1287,33 +1288,34 @@ export default function RunView({
           </div>
 
           <div>
-            <div className="flex items-center justify-between">
-              <div className="text-[11px] uppercase tracking-widest text-dust font-display font-semibold">
-                Heart rate
-              </div>
-              {/* Force a fresh pairing any time — even while connected, in case
-                  readings look wrong and Jon wants to re-test the strap. */}
-              {hr.supported && hr.bpm !== null && (
-                <button
-                  onClick={hr.connect}
-                  aria-label="Re-pair HR strap"
-                  className="text-[10px] font-display font-semibold uppercase tracking-widest text-dust border border-seam rounded-md px-2 py-1 min-h-[32px]"
-                >
-                  ⟳ Re-pair
-                </button>
-              )}
+            <div className="text-[11px] uppercase tracking-widest text-dust font-display font-semibold">
+              Heart rate
             </div>
             {hr.bpm !== null ? (
-              <div
-                className={`font-display font-bold text-6xl leading-none tabular-nums ${
-                  judge ? hrColor(hr.bpm, heartBand) : "text-bone"
-                }`}
-              >
-                {hr.bpm}
-                {hr.zone !== null && (
-                  <span className="text-xl text-dust"> Z{hr.zone + 1}</span>
+              <>
+                <div
+                  className={`font-display font-bold text-6xl leading-none tabular-nums ${
+                    judge ? hrColor(hr.bpm, heartBand) : "text-bone"
+                  }`}
+                >
+                  {hr.bpm}
+                  {hr.zone !== null && (
+                    <span className="text-xl text-dust"> Z{hr.zone + 1}</span>
+                  )}
+                </div>
+                {/* Force a fresh pairing any time — even while connected, in case
+                    readings look wrong and Jon wants to re-test the strap. A real
+                    48 px pill under the number, well away from the Lock FAB. */}
+                {hr.supported && (
+                  <button
+                    onClick={hr.connect}
+                    aria-label="Re-pair HR strap"
+                    className="mt-3 bg-coal border border-seam rounded-lg px-4 text-bone font-display font-bold tracking-widest uppercase text-xs min-h-[48px]"
+                  >
+                    ⟳ Re-pair
+                  </button>
                 )}
-              </div>
+              </>
             ) : (
               <div className="flex items-center gap-3 flex-wrap">
                 <span className="font-display font-bold text-6xl leading-none text-dust">--</span>

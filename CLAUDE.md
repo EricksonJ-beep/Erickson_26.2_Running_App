@@ -94,8 +94,9 @@ Single page, four bottom tabs (`app/page.tsx`): **Today · Plan · Log · Progre
   clean re-pair (works even while "connected"); `reconnect()` is one-tap retry. Live screen surfaces
   ⟳ Re-pair (connected) / Reconnect+Re-pair (lost) / Pair (idle). **Phases:** `countdown → live →
   summary`. A 5→GO countdown (`COUNTDOWN_SEC`) pre-warms GPS — only accumulates after `gps.start()`
-  at GO, so cold-start scatter is discarded. **Lock controls** (🔒): floating circular FAB on the
-  right edge at mid-height (`top-1/2`, thumb-reachable one-handed); full-screen stats-only overlay
+  at GO, so cold-start scatter is discarded. **Lock controls** (🔒): floating 80 px circular FAB on the
+  right edge at mid-height (`top-1/2`, thumb-reachable one-handed; the hero column is `pr-24` so
+  nothing sits under it — ⟳ Re-pair is a 48 px pill *below* the HR number, Sep 29); full-screen stats-only overlay
   disabling every control; hold-to-unlock 2 s (`UNLOCK_HOLD_MS`). Hold timers are guarded against a
   double-pointerdown interval leak + reset on lock-toggle/background/unmount (fixed the old
   "couldn't re-lock" glitch). Live screen shows a GPS accuracy readout (`gps.lastAccuracy`). GPS
