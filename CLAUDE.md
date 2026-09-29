@@ -222,6 +222,21 @@ another run" (won't overwrite; a hint says so); history rows key/edit/delete by 
 `[[project_multi_run_per_day]]`.
 
 ## In Progress / Next Up
+- [x] **Session Sep 29 2026 (2) — Run Mode once-over for "runs stopping / GPS drops when the
+      screen turns on".** Three code fixes (web-only, ship OTA): **(1)** `useGps` stamps each fix
+      with the receiver's own time (`position.time` / `pos.timestamp`, `fixTime()`, falls back to
+      `Date.now()` past 60 s skew) — bridge deliveries can queue while the screen is off and flush
+      in a burst on wake; arrival-time stamps made the burst look ~0 ms apart so the 6.7 m/s speed
+      gate discarded it. Pace window is now anchored on the last fix's time and blanks on arrival
+      staleness. **(2)** The 45 s native-silent safety net **no longer removes the native watcher**
+      — it starts web GPS as a *supplement* (`stopWeb`), retired on the first native fix. **(3)**
+      `RunView`'s checkpoint effect listed `seg` (fresh object per render) as a dep → it re-ran and
+      wrote the full checkpoint on every fix/tick; now `writeCheckpoint` is a stable callback
+      reading `segRef`, on the 10 s interval **plus** a fix-driven write (background timers are
+      throttled to 1/min after 5 min hidden; fixes aren't). *Open:* auto-recover a fresh checkpoint
+      on launch instead of the "Recover run" tap; Today's `key={day}` remount would unmount a run
+      crossing midnight. None of this is hardware-validated yet — check Sensor check's crash log
+      for `native GPS watcher silent` events after the next pocketed run.
 - [x] **Session Sep 29 2026 — fixed: Progress → Export did nothing in the native app.** The
       `<a download>` + Blob URL trick is a silent no-op in Android WebView. New
       `FileExportPlugin.java` (`FileExport.save`) writes the JSON to **Downloads** via MediaStore

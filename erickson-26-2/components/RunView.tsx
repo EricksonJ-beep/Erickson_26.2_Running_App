@@ -237,19 +237,25 @@ export default function RunView({
   // plus immediately on backgrounding (the moment Android is most likely to
   // kill us) and at GO. Includes the segment position so a recovered interval
   // run resumes on the right rep. Cleared only on save/discard.
+  // `seg` is read through segRef: it's a fresh object every render, and listing
+  // it as a dependency made this effect re-run — and serialize the whole
+  // checkpoint to localStorage — on every GPS fix and every 1 s tick.
+  const lastCheckpointRef = useRef(0);
+  const writeCheckpoint = useCallback(() => {
+    const g = gps.checkpoint();
+    if (!g) return;
+    const s = segRef.current.checkpoint();
+    saveLiveRun({
+      workout,
+      savedAt: Date.now(),
+      gps: g,
+      hr: hr.totals(),
+      ...(s ? { seg: s } : {})
+    });
+    lastCheckpointRef.current = Date.now();
+  }, [gps.checkpoint, hr.totals, workout]);
   useEffect(() => {
     if (phase !== "live") return;
-    const writeCheckpoint = () => {
-      const g = gps.checkpoint();
-      if (!g) return;
-      saveLiveRun({
-        workout,
-        savedAt: Date.now(),
-        gps: g,
-        hr: hr.totals(),
-        ...(seg.checkpoint() ? { seg: seg.checkpoint()! } : {})
-      });
-    };
     writeCheckpoint();
     const id = window.setInterval(writeCheckpoint, CHECKPOINT_MS);
     const onHide = () => {
@@ -262,7 +268,15 @@ export default function RunView({
       document.removeEventListener("visibilitychange", onHide);
       window.removeEventListener("pagehide", writeCheckpoint);
     };
-  }, [phase, gps.checkpoint, hr.totals, workout, seg]);
+  }, [phase, writeCheckpoint]);
+  // Screen off for 5+ min → Chrome throttles the interval above to once a
+  // minute, but native GPS fixes keep arriving through the bridge. Ride them:
+  // a fix more than CHECKPOINT_MS after the last write refreshes the checkpoint,
+  // so a kill while pocketed loses ≤10 s either way.
+  useEffect(() => {
+    if (phase !== "live" || gps.lastFixAt == null) return;
+    if (Date.now() - lastCheckpointRef.current >= CHECKPOINT_MS) writeCheckpoint();
+  }, [phase, gps.lastFixAt, writeCheckpoint]);
 
   // Countdown → GO. Ticks each second with a haptic buzz + tone; at zero we
   // commit the GPS baseline (gps.start) and drop into the live screen. GPS has

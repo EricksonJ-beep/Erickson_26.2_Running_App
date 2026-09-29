@@ -33,6 +33,14 @@ const PACE_MIN_WINDOW_M = 20;
 const AUTOPAUSE_SPEED_MS = 0.5;
 const AUTOPAUSE_AFTER_MS = 15_000;
 const ROUTE_SAMPLE_MS = 5_000;
+// How far a fix's own timestamp may sit from the system clock before we stop
+// trusting it and stamp arrival time instead (some devices report raw GPS
+// time). Delivery hiccups are seconds, not minutes, so this is generous.
+const FIX_TIME_SKEW_MS = 60_000;
+// If the native watcher registers but stays silent this long, add web GPS as a
+// supplement. A cold outdoor lock can take 30–45 s; tripping early used to tear
+// the native watcher down and strand whole runs on screen-on-only web GPS.
+const NATIVE_SILENT_MS = 45_000;
 // Hard cap on saved route points. A 20-miler at 5 s sampling is ~2,400 points
 // (~120 KB); every saveRun re-serializes the whole runs map, so unbounded
 // routes would crowd the ~5 MB localStorage budget right when runs get longest.
@@ -46,6 +54,15 @@ interface Pt {
   alt: number | null; // meters above sea level, if the device reports it
   t: number; // ms epoch
   d: number; // cumulative meters at this point
+}
+
+// Timestamp for a fix: the receiver's own time (native `time`, web
+// `timestamp`) when it's sane, else the system clock. Fixes can queue in the
+// bridge while the screen is off and flush in a burst on wake — stamping
+// arrival time made a burst look ~0 ms apart, the speed gate rejected all of
+// it, and the run "lost GPS" right as the screen came on.
+function fixTime(reported: number | null | undefined, now: number): number {
+  return reported != null && Math.abs(now - reported) < FIX_TIME_SKEW_MS ? reported : now;
 }
 
 function haversineMeters(aLat: number, aLng: number, bLat: number, bLng: number): number {
@@ -139,10 +156,13 @@ export function useGps(active: boolean) {
     const meters = last?.d ?? 0;
     const miles = meters / METERS_PER_MILE;
 
-    // Trailing-window pace
+    // Trailing-window pace, anchored on the latest fix's own time (fixes carry
+    // receiver time, which needn't match the system clock to the ms). Blank
+    // once no fix has *arrived* for a window — GPS lost → pace shows "—".
     let currentPaceSec: number | null = null;
-    if (last && !pausedRef.current && !autoPausedRef.current) {
-      const cutoff = now - PACE_WINDOW_MS;
+    const fresh = lastFixAtRef.current !== null && now - lastFixAtRef.current <= PACE_WINDOW_MS;
+    if (last && fresh && !pausedRef.current && !autoPausedRef.current) {
+      const cutoff = last.t - PACE_WINDOW_MS;
       let first = last;
       for (let i = pts.length - 1; i >= 0 && pts[i].t >= cutoff; i--) first = pts[i];
       const windowM = last.d - first.d;
@@ -172,11 +192,18 @@ export function useGps(active: boolean) {
   // native background watcher — feed every fix through here, so the filtering,
   // warmup, pause/bridge, distance, and split logic is written exactly once.
   const onFix = useCallback(
-    (latitude: number, longitude: number, accuracy: number, altitude: number | null) => {
+    (
+      latitude: number,
+      longitude: number,
+      accuracy: number,
+      altitude: number | null,
+      reportedAt?: number | null
+    ) => {
       {
-        const t = Date.now();
+        const now = Date.now();
+        const t = fixTime(reportedAt, now);
         lastAccuracyRef.current = accuracy;
-        lastFixAtRef.current = t; // a fix arrived → signal is alive
+        lastFixAtRef.current = now; // a fix arrived → signal is alive (arrival, not fix time)
         if (accuracy > MAX_ACCURACY_M) {
           snapshot(); // surface the bad-accuracy reading, count nothing
           return;
@@ -265,12 +292,14 @@ export function useGps(active: boolean) {
     // 1 s ticker only triggers recomputation from timestamps —
     // nothing accumulates on the timer itself.
     const ticker = window.setInterval(snapshot, 1000);
-    let stopSource: (() => void) | undefined;
+    let stopNative: (() => void) | undefined;
+    let stopWeb: (() => void) | undefined;
 
     // Web position source — the browser path, and the fallback if the native
     // watcher fails for any reason (missing plugin, bridge error): a run with
     // screen-on GPS beats a run that can't start.
     const startWebWatch = () => {
+      if (stopWeb) return; // already watching
       if (typeof navigator === "undefined" || !navigator.geolocation) {
         statusRef.current = "unsupported";
         snapshot();
@@ -280,7 +309,13 @@ export function useGps(active: boolean) {
       snapshot();
       const watchId = navigator.geolocation.watchPosition(
         (pos) =>
-          onFix(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, pos.coords.altitude),
+          onFix(
+            pos.coords.latitude,
+            pos.coords.longitude,
+            pos.coords.accuracy,
+            pos.coords.altitude,
+            pos.timestamp
+          ),
         (err) => {
           if (err.code === err.PERMISSION_DENIED) {
             statusRef.current = "denied";
@@ -290,7 +325,10 @@ export function useGps(active: boolean) {
         },
         { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
       );
-      stopSource = () => navigator.geolocation.clearWatch(watchId);
+      stopWeb = () => {
+        navigator.geolocation.clearWatch(watchId);
+        stopWeb = undefined;
+      };
     };
 
     if (isNativeApp()) {
@@ -329,17 +367,29 @@ export function useGps(active: boolean) {
                 return; // other errors: keep watching — signal often returns
               }
               if (!position || position.simulated) return;
-              // First native fix → lock to native for good and cancel the
-              // acquisition safety net, so a later gap (tunnel, screen off)
-              // can never downgrade a working native watcher to web GPS.
+              // First native fix → native owns the run from here. Cancel the
+              // safety net and drop any web supplement it started, so a later
+              // gap (tunnel, screen off) can never downgrade to web GPS.
               if (!gotFix) {
                 gotFix = true;
                 if (livenessTimer != null) {
                   window.clearTimeout(livenessTimer);
                   livenessTimer = null;
                 }
+                if (stopWeb) {
+                  noteTrapped("native GPS fix arrived → dropped web supplement");
+                  stopWeb();
+                }
+                sourceRef.current = "native";
+                snapshot();
               }
-              onFix(position.latitude, position.longitude, position.accuracy, position.altitude);
+              onFix(
+                position.latitude,
+                position.longitude,
+                position.accuracy,
+                position.altitude,
+                position.time
+              );
             }
           )
           .then((id) => {
@@ -350,19 +400,16 @@ export function useGps(active: boolean) {
               native.removeWatcher({ id }).catch(() => {});
               return;
             }
-            // Acquisition safety net: only if the watcher registers but NEVER
-            // delivers a fix (a genuinely broken plugin) do we fall back to web.
-            // Generous window — a cold GPS lock outdoors can take 30–45 s, and
-            // tripping early was silently stranding whole runs on screen-on-only
-            // web GPS (the "drops when the screen turns off" bug). Cancelled the
-            // instant the first native fix arrives.
+            // Acquisition safety net: a registered watcher that hasn't delivered
+            // a fix yet gets web GPS *alongside* it — never instead of it. The
+            // old version removed the native watcher here, and a slow cold lock
+            // stranded the whole run on screen-on-only GPS. Now the native
+            // watcher stays up; its first fix retires the supplement.
             livenessTimer = window.setTimeout(() => {
               if (removed || gotFix) return;
-              noteTrapped("native GPS watcher silent for 45 s → web fallback");
-              native.removeWatcher({ id }).catch(() => {});
-              watcherId = null;
+              noteTrapped("native GPS watcher silent for 45 s → web supplement started");
               startWebWatch();
-            }, 45_000);
+            }, NATIVE_SILENT_MS);
           })
           .catch((e) => {
             if (removed) return;
@@ -370,7 +417,7 @@ export function useGps(active: boolean) {
             startWebWatch(); // plugin refused — degrade, don't die
           });
       });
-      stopSource = () => {
+      stopNative = () => {
         removed = true;
         if (livenessTimer !== null) window.clearTimeout(livenessTimer);
         if (watcherId && geo) geo.removeWatcher({ id: watcherId }).catch(() => {});
@@ -381,7 +428,8 @@ export function useGps(active: boolean) {
 
     return () => {
       window.clearInterval(ticker);
-      stopSource?.();
+      stopNative?.();
+      stopWeb?.();
     };
   }, [active, onFix, snapshot]);
 
