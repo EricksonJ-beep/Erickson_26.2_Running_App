@@ -256,8 +256,11 @@ another run" (won't overwrite; a hint says so); history rows key/edit/delete by 
       (Android 10+, no permission) or falls back to the share sheet; web side `exportBackup()` in
       `ProgressView` + `loadFileExport()` in `nativeBridge`. APKs < 0.6.0 fall back to copying the
       JSON to the clipboard. `exportAll()` no longer stamps `hr_lastExport_v1` — `markExported()`
-      does, only on success. APK bumped to **0.6.0** (versionCode 6) — **needs an `android-v0.6.0`
-      tag/release after merge** for the fix to reach the phone.
+      does, only on success. APK bumped to **0.6.0** (versionCode 6); released as **`android-v0.6.0`** (Sep 29).
+      **Releases are now automatic:** pushing an `android-v*` tag makes `android-apk.yml` build the
+      APK *and* attach it as `erickson-26.2.apk` to that tag's GitHub Release (creating the release
+      if needed) — the phone install link is always
+      `github.com/EricksonJ-beep/Erickson_26.2_Running_App/releases/latest`. No more manual upload.
 - [x] **Session Jul 14 2026 — shipped: Capacitor Milestone 2 (native BLE heart rate).** The H10 now
       pairs inside the native shell (Web Bluetooth doesn't exist there). `useHeartRate` refactored to
       two transports behind one identical API — browser = hand-rolled Web Bluetooth (unchanged),
@@ -281,7 +284,7 @@ another run" (won't overwrite; a hint says so); history rows key/edit/delete by 
       injected `window.Capacitor` bridge); `useGps` refactored to a shared `onFix()` pipeline with
       swappable position sources (native watcher / web watchPosition — all math unchanged).
       **APK via GitHub Actions** (`android-apk.yml`: Actions "Run workflow" button or an `android-v*`
-      tag → artifact). Signing: password-protected keystore committed at `erickson-26-2/android/signing/`
+      tag → artifact; since Sep 29 a tag build also attaches the APK to the tag's GitHub Release). Signing: password-protected keystore committed at `erickson-26-2/android/signing/`
       (alias `erickson262`), password goes in the **`KEYSTORE_PASSWORD` repo secret — Jon must add it**
       (Codespace token can't; password was handed to Jon in chat Jul 9). Until then CI builds unsigned.
       **Next:** Jon adds secret → retag/rerun → sideload APK → first pocketed-phone run validates M1.

@@ -1,6 +1,8 @@
 # Builds the native Android shell (Capacitor, Phase 2) into a sideloadable APK.
 # Run it from the Actions tab ("Run workflow") or by pushing an android-v* tag;
-# the APK appears as a downloadable artifact on the run page.
+# the APK appears as a downloadable artifact on the run page. A tag build also
+# attaches the APK (as erickson-26.2.apk) to the GitHub Release for that tag,
+# creating the release if it doesn't exist yet - that's the phone install link.
 #
 # Signing: uses android/signing/erickson-release.keystore with the
 # KEYSTORE_PASSWORD repo secret. Without the secret the build still passes but
@@ -11,6 +13,9 @@ on:
   workflow_dispatch:
   push:
     tags: ["android-v*"]
+
+permissions:
+  contents: write # create/upload the GitHub Release on tag builds
 
 jobs:
   build:
@@ -59,3 +64,20 @@ jobs:
           name: erickson-26-2-apk
           path: erickson-26-2/android/app/build/outputs/apk/release/app-release*.apk
           if-no-files-found: error
+
+      - name: Attach APK to the GitHub Release (tag builds only)
+        if: startsWith(github.ref, 'refs/tags/android-v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          apk=$(ls erickson-26-2/android/app/build/outputs/apk/release/app-release*.apk | head -n1)
+          cp "$apk" erickson-26.2.apk
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" erickson-26.2.apk --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$TAG" erickson-26.2.apk \
+              --title "Erickson 26.2 — Android ${TAG#android-v}" \
+              --notes "Install: tap erickson-26.2.apk, open the download, Install. Updates the previous version in place - your data stays." \
+              --repo "$GITHUB_REPOSITORY"
+          fi
