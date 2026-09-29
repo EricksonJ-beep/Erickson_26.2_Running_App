@@ -416,7 +416,8 @@ function fmt(iso: string): string {
 }
 
 function fmtSplit(sec: number): string {
-  const m = Math.floor(sec / 60);
-  const s = Math.round(sec % 60);
+  const t = Math.round(sec); // whole seconds first — never "8:60"
+  const m = Math.floor(t / 60);
+  const s = t % 60;
   return `${m}:${String(s).padStart(2, "0")}`;
 }

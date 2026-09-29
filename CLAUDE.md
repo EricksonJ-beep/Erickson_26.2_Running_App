@@ -223,6 +223,15 @@ another run" (won't overwrite; a hint says so); history rows key/edit/delete by 
 `[[project_multi_run_per_day]]`.
 
 ## In Progress / Next Up
+- [x] **Session Sep 29 2026 (3) — marathon-day voice (Jon's spec) + the ":60" bug.** Marathon goal is
+      now **sub-4:00 at a 9:00 average**: `PACES.marathon` "9:00 /mi", `PACE_BANDS.marathon` 8:50–9:10,
+      `RACE_CUES.marathon` = pace every ½ mi, mile splits, **HR every 4th mile**, **redline 9:10**
+      (the sub-4 line — Jon chose it over the 9:00 goal so a 9:05 mile doesn't nag for four hours),
+      and new `timeAtMi: [20]` → at mile 20 the cue adds "Total time … On pace for …" (same shape as
+      the 13.1 halfway call, which already fires on a 26.2 bib). Fixed `fmtPace`-style formatters in
+      RunView/LogView/DiagnosticsView/segments that floored minutes and rounded seconds separately
+      → "8:60" on screen and "8 minutes 60 seconds" in the non-race voice; now round whole seconds
+      first.
 - [x] **Session Sep 29 2026 (2) — Run Mode once-over for "runs stopping / GPS drops when the
       screen turns on".** Three code fixes (web-only, ship OTA): **(1)** `useGps` stamps each fix
       with the receiver's own time (`position.time` / `pos.timestamp`, `fixTime()`, falls back to

@@ -17,9 +17,9 @@ const METERS_PER_MILE = 1609.344;
 
 function fmtPaceFromSpeed(speed: number | null | undefined): string {
   if (speed == null || !isFinite(speed) || speed < 0.3) return "—";
-  const sec = METERS_PER_MILE / speed;
+  const sec = Math.round(METERS_PER_MILE / speed); // whole seconds first — never "8:60"
   const m = Math.floor(sec / 60);
-  const s = Math.round(sec % 60);
+  const s = sec % 60;
   return `${m}:${String(s).padStart(2, "0")} /mi`;
 }
 

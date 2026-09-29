@@ -52,7 +52,7 @@ export const PACES = {
   tempo: "9:05–9:15 /mi",
   intervals: "8:20–8:35 /mi",
   halfRace: "9:00 /mi",
-  marathon: "9:35–9:45 /mi"
+  marathon: "9:00 /mi"
 };
 
 // Numeric twins of PACES in seconds per mile, for live pace judgment
@@ -63,7 +63,7 @@ export const PACE_BANDS: Record<keyof typeof PACES, { lo: number; hi: number }> 
   tempo: { lo: 545, hi: 555 },
   intervals: { lo: 500, hi: 515 },
   halfRace: { lo: 530, hi: 550 }, // 8:50–9:10, centered on 9:00 goal; 9:09 is the sub-2:00 redline
-  marathon: { lo: 575, hi: 585 }
+  marathon: { lo: 530, hi: 550 } // 8:50–9:10, centered on 9:00 goal; 9:09 is the sub-4:00 line
 };
 
 // Race-day voice profile — how Run Mode talks on a race bib, and only then.
@@ -76,10 +76,18 @@ export interface RaceCueProfile {
   everyMi: number; // spoken pace update cadence
   hrEveryMi: number; // heart rate gets appended on these whole-mile marks
   redlineSec: number; // pace slower than this triggers its own alert
+  // Whole-mile marks that also announce total elapsed time + projected finish
+  // (the halfway call covers the midpoint on its own — these are the extras).
+  timeAtMi?: number[];
 }
 export const RACE_CUES: Partial<Record<keyof typeof PACES, RaceCueProfile>> = {
   halfRace: { everyMi: 0.25, hrEveryMi: 3, redlineSec: 540 }, // 9:00 — the sub-2:00 line
-  marathon: { everyMi: 0.5, hrEveryMi: 3, redlineSec: 585 } // 9:45 — 26.2 is too long for quarters
+  // Marathon (Jon, Sep 29): sub-4:00 goal at a 9:00 average. Pace every ½ mi,
+  // split every mile, HR every 4th mile, total time at 13.1 (halfway) and
+  // at 20 — "at 20 I should be at three hours". Redline sits on the 9:10
+  // sub-4 line rather than the 9:00 goal so a 9:05 mile doesn't nag for
+  // four hours.
+  marathon: { everyMi: 0.5, hrEveryMi: 4, redlineSec: 550, timeAtMi: [20] }
 };
 
 // HR zones + per-workout targets now live in lib/zones.ts,
@@ -321,7 +329,7 @@ export const PLAN: Week[] = [
   ]),
   wk(14, "Marathon Build", "2026-09-07", "Marathon pace enters the long game.", [
     STR(0),
-    { d: 1, type: "tempo", title: "MP tempo", detail: "1 mi easy → 3 mi @ marathon pace (9:35–9:45) → 1 mi easy.", miles: 5, segments: tempoSegs(1, 3, "marathon", 1, "Marathon pace") },
+    { d: 1, type: "tempo", title: "MP tempo", detail: "1 mi easy → 3 mi @ marathon pace (~9:00) → 1 mi easy.", miles: 5, segments: tempoSegs(1, 3, "marathon", 1, "Marathon pace") },
     { d: 2, type: "easy", title: "Easy run", detail: "4 mi conversational.", miles: 4 },
     XT(3),
     { d: 4, type: "easy", title: "Easy run", detail: "2 mi very relaxed.", miles: 2 },

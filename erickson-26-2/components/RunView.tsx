@@ -53,8 +53,11 @@ const REDLINE_START_MI = 0.25;
 
 function fmtPace(sec: number | null): string {
   if (sec === null || !isFinite(sec) || sec <= 0) return "—";
-  const m = Math.floor(sec / 60);
-  const s = Math.round(sec % 60);
+  // Round to whole seconds FIRST — flooring minutes and rounding seconds
+  // separately turned 539.6 s into "8:60" instead of "9:00".
+  const t = Math.round(sec);
+  const m = Math.floor(t / 60);
+  const s = t % 60;
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
@@ -379,6 +382,14 @@ export default function RunView({
       else if (paceSec != null) parts.push(`Pace ${fmtSpokenPace(paceSec)}.`);
       else return; // no pace fix yet — nothing worth saying out loud
 
+      // Checkpoint miles (marathon: 20) get the total clock + projection, the
+      // same shape as the halfway call — "am I on schedule" at a glance.
+      if (wholeMile && raceCue.timeAtMi?.includes(mileIdx)) {
+        parts.push(`Total time ${fmtSpokenElapsed(gps.movingSec)}.`);
+        if (gps.avgPaceSec != null && workout.miles > 0) {
+          parts.push(`On pace for ${fmtSpokenClock(gps.avgPaceSec * workout.miles)}.`);
+        }
+      }
       if (
         wholeMile &&
         mileIdx % raceCue.hrEveryMi === 0 &&
@@ -417,8 +428,8 @@ export default function RunView({
 
     cue(parts.join(" "), "info");
   }, [
-    gps.miles, gps.splits, gps.currentPaceSec, hr.bpm, hr.zone, paceBand,
-    cueIntervalMi, workout.type, raceCue, cue, seg.active
+    gps.miles, gps.splits, gps.currentPaceSec, gps.movingSec, gps.avgPaceSec, hr.bpm, hr.zone,
+    paceBand, cueIntervalMi, workout.type, workout.miles, raceCue, cue, seg.active
   ]);
 
   // Race-day redline — the one alert Jon asked for by name: the moment pace
