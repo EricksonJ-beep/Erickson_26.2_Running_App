@@ -10,6 +10,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(AudioFocusPlugin.class);
         registerPlugin(ScreenPinPlugin.class);
         registerPlugin(AppInfoPlugin.class);
+        registerPlugin(FileExportPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

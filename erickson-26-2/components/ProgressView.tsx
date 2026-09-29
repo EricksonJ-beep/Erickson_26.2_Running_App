@@ -4,9 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import { getPlan, Phase, daysUntil, findWeek, todayISO } from "@/lib/plan";
 import { computeZones, methodLabel } from "@/lib/zones";
 import {
-  CALIS_GOAL, CalisLog, exportAll, getBody, getCalis, getDone, getLastExport, getProfile,
+  CALIS_GOAL, CalisLog, exportAll, getBody, markExported, getCalis, getDone, getLastExport, getProfile,
   getRecoveryTests, getRuns, importAll, paceOf, saveProfile, storageEstimate, Profile
 } from "@/lib/storage";
+import { isNativeApp, loadFileExport } from "@/lib/nativeBridge";
 import { hrr1BandInfo, HRR1_LOW_FLAG } from "@/lib/recovery";
 import DiagnosticsView from "@/components/DiagnosticsView";
 import HRTestView from "@/components/HRTestView";
@@ -311,14 +312,9 @@ export default function ProgressView() {
         )}
         <div className="flex gap-2 mt-3">
           <button
-            onClick={() => {
-              const blob = new Blob([exportAll()], { type: "application/json" });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement("a");
-              a.href = url;
-              a.download = `erickson-262-${today}.json`;
-              a.click();
-              setTimeout(() => URL.revokeObjectURL(url), 10000);
+            onClick={async () => {
+              const msg = await exportBackup(`erickson-262-${today}.json`);
+              if (msg) window.alert(msg);
               force((n) => n + 1); // refresh the staleness nudge now that we've backed up
             }}
             className="flex-1 bg-gold text-ink font-display font-bold uppercase tracking-wider rounded-lg py-2.5 text-sm"
@@ -350,6 +346,42 @@ export default function ProgressView() {
       </div>
     </div>
   );
+}
+
+// Get the backup JSON off the phone. Browser/PWA: classic <a download>. Native
+// app: the WebView ignores <a download> (that was the "Export does nothing"
+// bug), so hand the JSON to FileExportPlugin → Downloads folder or share
+// sheet. APKs older than 0.6.0 lack the plugin → copy to the clipboard so the
+// backup can still be pasted somewhere safe. Returns a message to show, or null.
+async function exportBackup(filename: string): Promise<string | null> {
+  const data = exportAll();
+  if (!isNativeApp()) {
+    const url = URL.createObjectURL(new Blob([data], { type: "application/json" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    markExported();
+    return null;
+  }
+  const plugin = await loadFileExport();
+  if (plugin) {
+    try {
+      const { method } = await plugin.save({ filename, data });
+      markExported();
+      return method === "downloads" ? `Backup saved to Downloads as ${filename}` : null;
+    } catch {
+      // older APK without the plugin — fall through to the clipboard
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(data);
+    markExported();
+    return "This app version can't save files yet, so the backup was copied to your clipboard. Paste it into a note or email to keep it. Install the latest app update to get file export.";
+  } catch {
+    return "Export failed on this app version. Install the latest app update to get file export.";
+  }
 }
 
 // 80/20 intensity balance — the principle the whole plan is built on. Sums

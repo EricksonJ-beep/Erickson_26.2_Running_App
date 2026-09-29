@@ -222,6 +222,14 @@ another run" (won't overwrite; a hint says so); history rows key/edit/delete by 
 `[[project_multi_run_per_day]]`.
 
 ## In Progress / Next Up
+- [x] **Session Sep 29 2026 — fixed: Progress → Export did nothing in the native app.** The
+      `<a download>` + Blob URL trick is a silent no-op in Android WebView. New
+      `FileExportPlugin.java` (`FileExport.save`) writes the JSON to **Downloads** via MediaStore
+      (Android 10+, no permission) or falls back to the share sheet; web side `exportBackup()` in
+      `ProgressView` + `loadFileExport()` in `nativeBridge`. APKs < 0.6.0 fall back to copying the
+      JSON to the clipboard. `exportAll()` no longer stamps `hr_lastExport_v1` — `markExported()`
+      does, only on success. APK bumped to **0.6.0** (versionCode 6) — **needs an `android-v0.6.0`
+      tag/release after merge** for the fix to reach the phone.
 - [x] **Session Jul 14 2026 — shipped: Capacitor Milestone 2 (native BLE heart rate).** The H10 now
       pairs inside the native shell (Web Bluetooth doesn't exist there). `useHeartRate` refactored to
       two transports behind one identical API — browser = hand-rolled Web Bluetooth (unchanged),

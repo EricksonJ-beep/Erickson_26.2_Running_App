@@ -328,8 +328,13 @@ export function exportAll(): string {
     null,
     2
   );
-  write(EXPORT_KEY, new Date().toISOString()); // stamp the backup so we can nudge on staleness
   return json;
+}
+
+// Stamp a successful backup so Progress can nudge on staleness. Separate from
+// exportAll() so a failed save doesn't count as a backup.
+export function markExported() {
+  write(EXPORT_KEY, new Date().toISOString());
 }
 
 // ISO timestamp of the last export, or null if never backed up. Progress uses

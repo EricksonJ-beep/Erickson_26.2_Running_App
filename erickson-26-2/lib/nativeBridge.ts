@@ -118,6 +118,27 @@ export function loadAppInfo(): Promise<AppInfoPlugin | null> {
   return appInfoPromise;
 }
 
+// Backup export (FileExportPlugin.java) — the WebView ignores <a download>,
+// so the native app needs this to get the JSON out. Ships with APK 0.6.0; on
+// older APKs save() rejects and callers fall back to the clipboard.
+export interface FileExportPlugin {
+  save(o: { filename: string; data: string }): Promise<{ method: "downloads" | "share" }>;
+}
+let fileExportPromise: Promise<FileExportPlugin | null> | null = null;
+export function loadFileExport(): Promise<FileExportPlugin | null> {
+  if (!isNativeApp()) return Promise.resolve(null);
+  if (!fileExportPromise) {
+    fileExportPromise = import("@capacitor/core")
+      .then((m) => {
+        const proxy = m.registerPlugin<FileExportPlugin>("FileExport");
+        const wrapped: FileExportPlugin = { save: (o) => Promise.resolve(proxy.save(o)) };
+        return wrapped;
+      })
+      .catch(() => null);
+  }
+  return fileExportPromise;
+}
+
 let geoPromise: Promise<BackgroundGeolocationPlugin | null> | null = null;
 export function loadNativeGeo(): Promise<BackgroundGeolocationPlugin | null> {
   if (!isNativeApp()) return Promise.resolve(null);
